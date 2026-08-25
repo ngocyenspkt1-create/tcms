@@ -8,17 +8,17 @@ export function AppHeader() {
             LOGO / BRAND
         ===================================================== */}
         <div className="flex w-[188px] shrink-0 items-center gap-2 border-r border-slate-200 px-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-700 text-[10px] font-bold text-white shadow-sm">
-            TC
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-700 text-[9px] font-bold text-white shadow-sm">
+            VH1
           </div>
 
           <div className="min-w-0">
-            <div className="text-[13px] font-bold leading-none text-slate-900">
-              TCMS
+            <div className="truncate text-[13px] font-bold leading-none text-slate-900">
+              Quản lý hợp đồng VH1
             </div>
 
             <div className="mt-1 truncate text-[8px] text-slate-400">
-              Technical Contract Management
+              Web quản lý hợp đồng
             </div>
           </div>
         </div>
@@ -119,7 +119,7 @@ export function AppHeader() {
               {/* USER INFORMATION */}
               <div className="hidden text-right sm:block">
                 <p className="max-w-[130px] truncate text-[10px] font-semibold leading-tight text-slate-800">
-                  Người dùng TCMS
+                  Người dùng VH1
                 </p>
 
                 <p className="mt-0.5 text-[8px] leading-tight text-slate-400">
@@ -129,7 +129,7 @@ export function AppHeader() {
 
               {/* AVATAR */}
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-white bg-blue-100 text-[9px] font-bold text-blue-700 shadow-sm">
-                TC
+                VH1
               </div>
 
               {/* DROPDOWN */}
