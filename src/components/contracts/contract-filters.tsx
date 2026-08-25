@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 export interface ContractFilterValues {
   search: string;
   year: string;
@@ -152,12 +154,12 @@ export function ContractFilters({
           ▦ Cột hiển thị
         </button>
 
-        <button
-          type="button"
-          className="h-9 whitespace-nowrap rounded-lg bg-blue-700 px-3.5 text-[10px] font-semibold text-white shadow-sm transition hover:bg-blue-800"
+        <Link
+          href="/contracts/new"
+          className="inline-flex h-9 items-center whitespace-nowrap rounded-lg bg-blue-700 px-3.5 text-[10px] font-semibold text-white shadow-sm transition hover:bg-blue-800"
         >
           ＋ Thêm hợp đồng
-        </button>
+        </Link>
       </div>
 
       {/* =====================================================

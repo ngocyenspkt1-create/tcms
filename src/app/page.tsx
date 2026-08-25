@@ -1,37 +1,15 @@
+"use client";
+
 import Link from "next/link";
 
+import { useContracts } from "@/components/contracts/contract-store";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-
-const contracts = [
-  {
-    contractNo: "203/HĐ-NĐDH-NPCETC-HADETECH.26",
-    packageName: "Thí nghiệm hiệu chỉnh thường xuyên lò hơi",
-    leadDepartment: "PXSCCN",
-    supervision: "PXVH1 + PXSCCN",
-    progress: 35,
-    remaining: "390 ngày",
-    assessment: "Bình thường",
-  },
-  {
-    contractNo: "169/HĐ-NĐDH-3T.25",
-    packageName: "Bảo dưỡng sửa chữa máy nén khí",
-    leadDepartment: "PXSCCN",
-    supervision: "PXSCCN + PXVH1",
-    progress: 100,
-    remaining: "Quá 25 ngày",
-    assessment: "Quá hạn",
-  },
-  {
-    contractNo: "215/HĐ-NĐDH.26",
-    packageName: "Kiểm tra và hiệu chỉnh hệ thống đo lường",
-    leadDepartment: "PXVH1",
-    supervision: "PXVH1 + PXSCĐTĐ",
-    progress: 65,
-    remaining: "18 ngày",
-    assessment: "Cần chú ý",
-  },
-];
+import {
+  formatRemainingDays,
+  getContractWarning,
+  getRemainingDays,
+} from "@/lib/contract-utils";
 
 const issues = [
   {
@@ -52,20 +30,17 @@ const issues = [
   },
 ];
 
-function AssessmentBadge({
-  value,
-}: {
-  value: string;
-}) {
-  let style = "bg-emerald-50 text-emerald-700";
+function AssessmentBadge({ value }: { value: string }) {
+  const styles: Record<string, string> = {
+    "Bình thường": "bg-emerald-50 text-emerald-700",
+    "Theo dõi": "bg-blue-50 text-blue-700",
+    "Sắp hết hạn": "bg-amber-50 text-amber-700",
+    Khẩn: "bg-orange-50 text-orange-700",
+    "Đã hết hạn": "bg-red-50 text-red-700",
+    "Đã hoàn thành": "bg-slate-100 text-slate-700",
+  };
 
-  if (value === "Cần chú ý") {
-    style = "bg-amber-50 text-amber-700";
-  }
-
-  if (value === "Quá hạn") {
-    style = "bg-red-50 text-red-700";
-  }
+  const style = styles[value] ?? styles["Theo dõi"];
 
   return (
     <span
@@ -77,6 +52,24 @@ function AssessmentBadge({
 }
 
 export default function Home() {
+  const { contracts, error } = useContracts();
+  const activeContracts = contracts.filter((contract) =>
+    ["ACTIVE", "IN_PROGRESS", "TECHNICAL_COMPLETION"].includes(contract.status)
+  );
+  const attentionContracts = contracts.filter((contract) =>
+    ["Theo dõi", "Sắp hết hạn", "Khẩn", "Đã hết hạn"].includes(
+      getContractWarning(contract)
+    )
+  );
+  const priorityContracts = [...contracts]
+    .filter((contract) => !["COMPLETED", "CLOSED", "CANCELLED"].includes(contract.status))
+    .sort(
+      (first, second) =>
+        (getRemainingDays(first) ?? Number.POSITIVE_INFINITY) -
+        (getRemainingDays(second) ?? Number.POSITIVE_INFINITY)
+    )
+    .slice(0, 5);
+
   return (
     <div className="min-h-screen bg-slate-100">
       <AppHeader />
@@ -86,6 +79,11 @@ export default function Home() {
 
         <main className="min-w-0 flex-1 p-4">
           <div className="mx-auto max-w-[1800px]">
+            {error && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                Không tải được dữ liệu tập trung: {error}
+              </div>
+            )}
             {/* Tiêu đề */}
             <div className="mb-4">
               <h1 className="text-xl font-bold text-slate-900">
@@ -106,7 +104,7 @@ export default function Home() {
                 </p>
 
                 <p className="mt-1 text-2xl font-bold">
-                  18
+                  {contracts.length}
                 </p>
 
                 <p className="mt-1 text-[10px] text-slate-400">
@@ -120,7 +118,7 @@ export default function Home() {
                 </p>
 
                 <p className="mt-1 text-2xl font-bold">
-                  7
+                  {activeContracts.length}
                 </p>
 
                 <p className="mt-1 text-[10px] text-slate-400">
@@ -134,7 +132,7 @@ export default function Home() {
                 </p>
 
                 <p className="mt-1 text-2xl font-bold">
-                  3
+                  {attentionContracts.length}
                 </p>
 
                 <p className="mt-1 text-[10px] text-slate-400">
@@ -148,7 +146,7 @@ export default function Home() {
                 </p>
 
                 <p className="mt-1 text-2xl font-bold">
-                  5
+                  {issues.length}
                 </p>
 
                 <p className="mt-1 text-[10px] text-slate-400">
@@ -213,13 +211,18 @@ export default function Home() {
                   </thead>
 
                   <tbody className="divide-y divide-slate-100">
-                    {contracts.map((contract) => (
+                    {priorityContracts.map((contract) => (
                       <tr
-                        key={contract.contractNo}
+                        key={contract.id}
                         className="hover:bg-slate-50"
                       >
                         <td className="border-r border-slate-200 px-2 py-2 font-medium">
-                          {contract.contractNo}
+                          <Link
+                            href={`/contracts/${contract.id}`}
+                            className="text-blue-700 hover:underline"
+                          >
+                            {contract.contractNumber}
+                          </Link>
                         </td>
 
                         <td className="border-r border-slate-200 px-2 py-2">
@@ -231,7 +234,13 @@ export default function Home() {
                         </td>
 
                         <td className="border-r border-slate-200 px-2 py-2">
-                          {contract.supervision}
+                          {Array.from(
+                            new Set(
+                              contract.supervisors.map(
+                                (supervisor) => supervisor.department
+                              )
+                            )
+                          ).join(" + ") || "-"}
                         </td>
 
                         <td className="border-r border-slate-200 px-2 py-2">
@@ -240,24 +249,24 @@ export default function Home() {
                               <div
                                 className="h-full bg-slate-800"
                                 style={{
-                                  width: `${contract.progress}%`,
+                                  width: `${contract.progressPercent}%`,
                                 }}
                               />
                             </div>
 
                             <span>
-                              {contract.progress}%
+                              {contract.progressPercent}%
                             </span>
                           </div>
                         </td>
 
                         <td className="border-r border-slate-200 px-2 py-2">
-                          {contract.remaining}
+                          {formatRemainingDays(contract)}
                         </td>
 
                         <td className="px-2 py-2">
                           <AssessmentBadge
-                            value={contract.assessment}
+                            value={getContractWarning(contract)}
                           />
                         </td>
                       </tr>

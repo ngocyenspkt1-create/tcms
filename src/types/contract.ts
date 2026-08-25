@@ -25,6 +25,7 @@ export interface Supervisor {
 
 export interface Contract {
   id: string;
+  version?: number;
 
   // =========================================================
   // 1. THÔNG TIN NHẬN DIỆN

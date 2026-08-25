@@ -6,16 +6,29 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "db:create": "node --env-file-if-exists=.env.local scripts/database/create.mjs",
+    "db:check": "node --env-file-if-exists=.env.local scripts/database/check.mjs",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/database/migrate.mjs",
+    "db:grant": "node --env-file-if-exists=.env.local scripts/database/grant-runtime.mjs",
+    "db:seed": "node --env-file-if-exists=.env.local scripts/database/seed.mjs",
+    "db:setup": "node scripts/database/setup.mjs",
+    "db:backup": "node --env-file-if-exists=.env.local scripts/database/run-powershell.mjs backup",
+    "db:restore": "node --env-file-if-exists=.env.local scripts/database/run-powershell.mjs restore",
+    "test:security": "node --test tests/security/*.test.ts"
   },
   "dependencies": {
     "next": "16.3.2",
+    "next-auth": "^5.0.0-beta.32",
+    "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

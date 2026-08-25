@@ -6,13 +6,12 @@ import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 
 import { ContractSummary } from "@/components/contracts/contract-summary";
+import { useContracts } from "@/components/contracts/contract-store";
 import {
   ContractFilters,
   ContractFilterValues,
 } from "@/components/contracts/contract-filters";
 import { ContractTable } from "@/components/contracts/contract-table";
-
-import { mockContracts } from "@/data/mock-contracts";
 
 import {
   getContractWarning,
@@ -66,6 +65,7 @@ function getWarningPriority(warning: string) {
 ========================================================= */
 
 export default function ContractsPage() {
+  const { contracts, error } = useContracts();
   const [filters, setFilters] =
     useState<ContractFilterValues>(initialFilters);
 
@@ -74,21 +74,21 @@ export default function ContractsPage() {
   ======================================================= */
 
   const leadDepartments = useMemo(() => {
-    const values = mockContracts.map(
+    const values = contracts.map(
       (contract) => contract.leadDepartment
     );
 
     return Array.from(new Set(values))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, "vi"));
-  }, []);
+  }, [contracts]);
 
   /* =======================================================
      DANH SÁCH ĐƠN VỊ THAM GIA GIÁM SÁT
   ======================================================= */
 
   const participantDepartments = useMemo(() => {
-    const values = mockContracts.flatMap((contract) =>
+    const values = contracts.flatMap((contract) =>
       contract.supervisors.map(
         (supervisor) => supervisor.department
       )
@@ -97,7 +97,7 @@ export default function ContractsPage() {
     return Array.from(new Set(values))
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b, "vi"));
-  }, []);
+  }, [contracts]);
 
   /* =======================================================
      FILTER + SORT
@@ -110,7 +110,7 @@ export default function ContractsPage() {
        FILTER
     ----------------------------------------------------- */
 
-    const result = mockContracts.filter((contract) => {
+    const result = contracts.filter((contract) => {
       /* SEARCH */
 
       const searchableText = normalizeText(
@@ -327,7 +327,7 @@ export default function ContractsPage() {
 
       return a.stt - b.stt;
     });
-  }, [filters]);
+  }, [contracts, filters]);
 
   /* =======================================================
      RESET FILTER
@@ -362,10 +362,16 @@ export default function ContractsPage() {
               </p>
             </div>
 
+            {error && (
+              <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                Không tải được dữ liệu tập trung: {error}
+              </div>
+            )}
+
             {/* KPI */}
 
             <ContractSummary
-              contracts={mockContracts}
+              contracts={contracts}
             />
 
             {/* FILTER */}
@@ -383,7 +389,7 @@ export default function ContractsPage() {
                   filteredContracts.length
                 }
                 totalCount={
-                  mockContracts.length
+                  contracts.length
                 }
                 onChange={setFilters}
                 onReset={resetFilters}
