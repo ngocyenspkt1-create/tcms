@@ -58,8 +58,8 @@ DO $$ BEGIN
 END $$;
 
 GRANT USAGE ON SCHEMA tcms TO tcms_app_runtime;
-GRANT SELECT ON tcms.app_users, tcms.user_role_scopes, tcms.roles, tcms.role_permissions,
-  tcms.permissions, tcms.departments TO tcms_app_runtime;
+GRANT SELECT ON tcms.schema_migrations, tcms.app_users, tcms.user_role_scopes, tcms.roles,
+  tcms.role_permissions, tcms.permissions, tcms.departments TO tcms_app_runtime;
 GRANT SELECT, INSERT, UPDATE ON tcms.contracts, tcms.contract_departments, tcms.contract_supervisors TO tcms_app_runtime;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA tcms TO tcms_app_runtime;
 

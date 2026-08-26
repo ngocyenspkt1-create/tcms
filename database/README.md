@@ -4,7 +4,7 @@
 
 `DRAFT - CHỈ DÙNG CHO DEV/TEST VỚI DỮ LIỆU GIẢ`
 
-Hai migration tại `migrations/001_security_foundation.sql` và `migrations/002_api_runtime.sql` tạo schema PostgreSQL, RBAC, audit append-only, RLS bắt buộc và role runtime quyền tối thiểu.
+Ba migration tại `migrations/001_security_foundation.sql`, `migrations/002_api_runtime.sql` và `migrations/003_contract_domain.sql` tạo schema PostgreSQL, RBAC, audit append-only, RLS bắt buộc, role runtime quyền tối thiểu và nền dữ liệu Contract/Contract Item.
 
 IT đã xác nhận PostgreSQL DEV. DBA vẫn cần review migration và chạy bằng tài khoản migration riêng trước khi kết nối ứng dụng.
 
@@ -15,7 +15,7 @@ IT đã xác nhận PostgreSQL DEV. DBA vẫn cần review migration và chạy 
 - `audit reader`: chỉ đọc audit theo nhiệm vụ.
 - `backup role`: tài khoản riêng theo công cụ backup; App không có credential này.
 
-Migration tạo role nhóm `tcms_app_runtime` không có quyền đăng nhập. DBA tạo login DEV riêng rồi cấp membership; tuyệt đối không dùng owner/superuser cho API.
+Migration tạo role nhóm `tcms_app_runtime` không có quyền đăng nhập. Quy trình DEV trong repository dùng `scripts/database/create.mjs` để tạo login owner/runtime từ các URL đã cấu hình và `scripts/database/grant-runtime.mjs` để cấp membership; tuyệt đối không dùng owner/superuser cho API.
 
 ## Security context cho mỗi transaction
 
@@ -34,14 +34,19 @@ SELECT set_config('app.app_version', $8, true);
 
 Không ghép chuỗi SQL từ dữ liệu người dùng. RLS chỉ là lớp phòng vệ bổ sung; backend vẫn phải gọi permission engine trước mọi thao tác.
 
-## Cách chạy thử sau khi DBA cấp PostgreSQL DEV
+## Quy trình setup PostgreSQL DEV
 
-DBA tạo database và role migration riêng, sau đó chạy bằng công cụ nội bộ được phê duyệt. Ví dụ cú pháp tham khảo:
+Sau khi cấu hình `.env.local` hoặc secret file ngoài repository, chạy quy trình theo đúng thứ tự:
 
 ```powershell
-psql --set ON_ERROR_STOP=1 --file database/migrations/001_security_foundation.sql
-psql --set ON_ERROR_STOP=1 --file database/migrations/002_api_runtime.sql
+npm.cmd run db:create
+npm.cmd run db:migrate
+npm.cmd run db:grant
+npm.cmd run db:seed
+npm.cmd run db:check
 ```
+
+`db:migrate` chạy migration 001, 002 và 003 theo thứ tự tên file bằng tài khoản trong `MIGRATION_DATABASE_URL`. `db:check` dùng tài khoản runtime trong `DATABASE_URL` và chỉ được đọc bảng theo dõi `tcms.schema_migrations`; quyền này không cho phép sửa hoặc xóa lịch sử migration.
 
 Không đưa connection string, mật khẩu hoặc token vào lệnh, README, mã nguồn hay lịch sử shell. Credential DEV phải được cấp qua cơ chế secret được phê duyệt.
 
