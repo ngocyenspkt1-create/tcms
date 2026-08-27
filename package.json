@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "save": "node scripts/git-save.mjs",
     "db:create": "node --env-file-if-exists=.env.local scripts/database/create.mjs",
     "db:check": "node --env-file-if-exists=.env.local scripts/database/check.mjs",
     "db:migrate": "node --env-file-if-exists=.env.local scripts/database/migrate.mjs",

@@ -20,14 +20,20 @@ export const metadata: Metadata = {
   description: "Web quản lý hợp đồng của Phân xưởng Vận hành 1",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html
       lang="vi"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <ContractStoreProvider>{children}</ContractStoreProvider>
+        <ContractStoreProvider>
+          {children}
+        </ContractStoreProvider>
       </body>
     </html>
   );
