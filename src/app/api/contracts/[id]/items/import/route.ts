@@ -11,13 +11,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     const context = await getRequestContext(request);
     const { id } = await params;
-    const entries = parseContractItemImportRequest(await request.json());
+    const rawBody = await request.json();
     const result = await withSecurityTransaction(context, async (client) => {
       const contract = await new PostgresContractRepository(client).findById(id);
       if (!contract) return null;
       requireContractPermission(context.principal, "contract.identity.update", contract);
 
       const repository = new PostgresContractItemRepository(client);
+      const existingItems = await repository.list(id);
+      const existingWeightTotal = existingItems.reduce((sum, item) => sum + item.weightPercent, 0);
+      const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
+
+      const entries = parseContractItemImportRequest(rawBody, availableWeightPercent);
+      const importWeightTotal = entries.reduce((sum, entry) => sum + entry.input.weightPercent, 0);
+
+      if (existingWeightTotal + importWeightTotal > 100.005) {
+        throw new Error("CONTRACT_ITEM_WEIGHT_TOTAL_EXCEEDED");
+      }
+
       const created = [];
       for (const entry of entries) {
         const item = await repository.create(id, entry.input, context.principal.userId);

@@ -106,7 +106,10 @@ export type ParsedContractItemImport = {
   checklistItems: string[];
 };
 
-export function parseContractItemImportRequest(value: unknown): ParsedContractItemImport[] {
+export function parseContractItemImportRequest(
+  value: unknown,
+  availableWeightPercent: number = 100,
+): ParsedContractItemImport[] {
   if (!value || typeof value !== "object") throw new SyntaxError("INVALID_JSON");
   const raw = value as { items?: unknown; weightAllocationMethod?: unknown };
   if (!Array.isArray(raw.items) || raw.items.length === 0) throw new SyntaxError("IMPORT_ITEMS_REQUIRED");
@@ -116,7 +119,7 @@ export function parseContractItemImportRequest(value: unknown): ParsedContractIt
   }
 
   const method = raw.weightAllocationMethod as ContractItemWeightAllocationMethod;
-  const equalWeights = method === "EQUAL" ? allocateEqualWeights(raw.items.length) : null;
+  const equalWeights = method === "EQUAL" ? allocateEqualWeights(raw.items.length, availableWeightPercent) : null;
   const prepared = raw.items.map((item, index) => {
     if (!item || typeof item !== "object") throw new SyntaxError("INVALID_CONTRACT_ITEM_FIELDS");
     const itemRaw = item as Record<string, unknown>;
@@ -135,6 +138,6 @@ export function parseContractItemImportRequest(value: unknown): ParsedContractIt
       checklistItems,
     };
   });
-  validateImportWeightTotal(prepared.map((entry) => entry.input.weightPercent));
+  validateImportWeightTotal(prepared.map((entry) => entry.input.weightPercent), availableWeightPercent);
   return prepared;
 }

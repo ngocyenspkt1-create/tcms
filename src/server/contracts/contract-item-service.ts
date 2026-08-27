@@ -52,34 +52,203 @@ export function summarizeContractItems(items: readonly ContractItem[]): Contract
   };
 }
 
-export function splitWorkContentIntoChecklistItems(value: string | null | undefined) {
+function tryExtractNumberedList(text: string): string[] | null {
+  const regex = /(?:^|[\r\n\s]+)(?:(?:\((\d{1,3})\))|(\d{1,3})(?:\.-|[.)]))(?=\s+\S)/g;
+
+  type MatchEntry = {
+    index: number;
+    num: number;
+    contentStartIndex: number;
+  };
+
+  const matches: MatchEntry[] = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = regex.exec(text)) !== null) {
+    const rawMatch = m[0];
+    const numStr = m[1] ?? m[2];
+    const num = parseInt(numStr, 10);
+    const matchIndex = m.index;
+
+    const leadingWhitespaceLen = rawMatch.length - rawMatch.trimStart().length;
+    const actualMarkerStart = matchIndex + leadingWhitespaceLen;
+
+    const sub = text.slice(actualMarkerStart);
+    const markerMatch = sub.match(/^(?:\(\d{1,3}\)|\d{1,3}(?:\.-|[.)]))\s+/);
+    if (!markerMatch) continue;
+
+    const contentStartIndex = actualMarkerStart + markerMatch[0].length;
+
+    matches.push({
+      index: actualMarkerStart,
+      num,
+      contentStartIndex,
+    });
+  }
+
+  if (matches.length < 2) {
+    return null;
+  }
+
+  if (matches[0].num > 2) {
+    return null;
+  }
+
+  for (let i = 1; i < matches.length; i++) {
+    const prev = matches[i - 1].num;
+    const curr = matches[i].num;
+    if (curr <= prev || curr - prev > 10) {
+      return null;
+    }
+  }
+
+  const items: string[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const contentStart = matches[i].contentStartIndex;
+    const contentEnd = i < matches.length - 1 ? matches[i + 1].index : text.length;
+    const itemText = text.slice(contentStart, contentEnd).trim();
+    if (itemText) {
+      items.push(itemText);
+    }
+  }
+
+  return items.length >= 2 ? items : null;
+}
+
+function tryExtractLetteredList(text: string): string[] | null {
+  const regex = /(?:^|[\r\n\s]+)(?:(?:\(([a-zA-Z])\))|([a-zA-Z])[.)])(?=\s+\S)/g;
+
+  type MatchEntry = {
+    index: number;
+    letter: string;
+    code: number;
+    contentStartIndex: number;
+  };
+
+  const matches: MatchEntry[] = [];
+  let m: RegExpExecArray | null;
+
+  while ((m = regex.exec(text)) !== null) {
+    const rawMatch = m[0];
+    const letter = (m[1] ?? m[2]).toLowerCase();
+    const code = letter.charCodeAt(0);
+    const matchIndex = m.index;
+
+    const leadingWhitespaceLen = rawMatch.length - rawMatch.trimStart().length;
+    const actualMarkerStart = matchIndex + leadingWhitespaceLen;
+
+    const sub = text.slice(actualMarkerStart);
+    const markerMatch = sub.match(/^(?:\([a-zA-Z]\)|[a-zA-Z][.)])\s+/);
+    if (!markerMatch) continue;
+
+    const contentStartIndex = actualMarkerStart + markerMatch[0].length;
+
+    matches.push({
+      index: actualMarkerStart,
+      letter,
+      code,
+      contentStartIndex,
+    });
+  }
+
+  if (matches.length < 2) {
+    return null;
+  }
+
+  if (matches[0].letter !== "a" && matches[0].letter !== "b") {
+    return null;
+  }
+
+  for (let i = 1; i < matches.length; i++) {
+    const prev = matches[i - 1].code;
+    const curr = matches[i].code;
+    if (curr !== prev + 1) {
+      return null;
+    }
+  }
+
+  const items: string[] = [];
+  for (let i = 0; i < matches.length; i++) {
+    const contentStart = matches[i].contentStartIndex;
+    const contentEnd = i < matches.length - 1 ? matches[i + 1].index : text.length;
+    const itemText = text.slice(contentStart, contentEnd).trim();
+    if (itemText) {
+      items.push(itemText);
+    }
+  }
+
+  return items.length >= 2 ? items : null;
+}
+
+function tryExtractLineList(text: string): string[] | null {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2) return null;
+
+  const marker = /^(?:[-*•+]|(?:\d+|[A-Za-z])[.)])\s+(.+)$/;
+  const matches = lines.map((line) => line.match(marker));
+  if (matches.every(Boolean)) {
+    return matches.map((match) => match?.[1].trim() ?? "").filter(Boolean);
+  }
+  return null;
+}
+
+function tryExtractInlineBullets(text: string): string[] | null {
+  if (!text.includes(" - ") && !text.includes(" • ") && !text.includes(" * ")) {
+    return null;
+  }
+  const startsWithBullet = /^[-*•+]\s+/.test(text);
+  const parts = text.split(/(?:^|[\r\n\s]+)(?:[-•*])\s+/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length >= (startsWithBullet ? 2 : 3)) {
+    return parts;
+  }
+  return null;
+}
+
+export function splitWorkContentIntoChecklistItems(value: string | null | undefined): string[] {
   const text = value?.trim();
   if (!text) return [];
 
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const marker = /^(?:[-*•]|(?:\d+|[A-Za-z])[.)])\s+(.+)$/;
-  const matches = lines.map((line) => line.match(marker));
-  if (lines.length >= 2 && matches.every(Boolean)) {
-    return matches.map((match) => match?.[1].trim() ?? "").filter(Boolean);
+  const numbered = tryExtractNumberedList(text);
+  if (numbered && numbered.length >= 2) {
+    return numbered;
   }
+
+  const lettered = tryExtractLetteredList(text);
+  if (lettered && lettered.length >= 2) {
+    return lettered;
+  }
+
+  const lineList = tryExtractLineList(text);
+  if (lineList && lineList.length >= 2) {
+    return lineList;
+  }
+
+  const inlineBullets = tryExtractInlineBullets(text);
+  if (inlineBullets && inlineBullets.length >= 2) {
+    return inlineBullets;
+  }
+
   return [text];
 }
 
-export function allocateEqualWeights(itemCount: number) {
+export function allocateEqualWeights(itemCount: number, totalPercent: number = 100) {
   if (!Number.isInteger(itemCount) || itemCount <= 0) throw new SyntaxError("IMPORT_ITEMS_REQUIRED");
-  const totalHundredths = 10_000;
+  if (!Number.isFinite(totalPercent) || totalPercent < 0 || totalPercent > 100) {
+    throw new SyntaxError("INVALID_IMPORT_WEIGHTS");
+  }
+  const totalHundredths = Math.round(totalPercent * 100);
   const base = Math.floor(totalHundredths / itemCount);
   return Array.from({ length: itemCount }, (_, index) =>
     (index === itemCount - 1 ? totalHundredths - base * (itemCount - 1) : base) / 100,
   );
 }
 
-export function validateImportWeightTotal(weights: readonly number[]) {
+export function validateImportWeightTotal(weights: readonly number[], expectedTotalPercent: number = 100) {
   if (!weights.length || weights.some((weight) => !Number.isFinite(weight) || weight < 0 || weight > 100)) {
     throw new SyntaxError("INVALID_IMPORT_WEIGHTS");
   }
   const total = weights.reduce((sum, weight) => sum + weight, 0);
-  if (Math.abs(total - 100) > WEIGHT_TOLERANCE) throw new SyntaxError("INVALID_IMPORT_WEIGHT_TOTAL");
+  if (Math.abs(total - expectedTotalPercent) > WEIGHT_TOLERANCE) throw new SyntaxError("INVALID_IMPORT_WEIGHT_TOTAL");
 }
 
 export function parseChecklistCompletionInput(value: unknown) {

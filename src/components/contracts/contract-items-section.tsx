@@ -148,11 +148,12 @@ const inputClass =
 const textareaClass =
   "w-full rounded-lg border border-slate-200 bg-white p-2 text-[11px] outline-none focus:border-blue-500";
 
-function equalWeights(itemCount: number) {
-  if (!itemCount) return [];
-  const base = Math.floor(10_000 / itemCount);
+function equalWeights(itemCount: number, totalPercent: number = 100) {
+  if (!itemCount || totalPercent <= 0) return Array(itemCount).fill(0);
+  const totalHundredths = Math.round(totalPercent * 100);
+  const base = Math.floor(totalHundredths / itemCount);
   return Array.from({ length: itemCount }, (_, index) =>
-    (index === itemCount - 1 ? 10_000 - base * (itemCount - 1) : base) / 100,
+    (index === itemCount - 1 ? totalHundredths - base * (itemCount - 1) : base) / 100,
   );
 }
 
@@ -457,8 +458,10 @@ export function ContractItemsSection({
           ),
         );
 
-      setSuggestedWeights(Object.fromEntries(result.drafts.map((draft) => [draft.draftId, draft.weightPercent])));
-      const weights = equalWeights(result.drafts.length);
+      const existingWeightTotal = summary?.allocatedWeightPercent ?? items.reduce((sum, item) => sum + item.weightPercent, 0);
+      const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
+      const weights = equalWeights(result.drafts.length, availableWeightPercent);
+      setSuggestedWeights(Object.fromEntries(result.drafts.map((draft, idx) => [draft.draftId, weights[idx] ?? draft.weightPercent])));
       setPdfPreview({
         ...result,
         drafts: result.drafts.map((draft, index) => ({ ...draft, weightPercent: weights[index] ?? draft.weightPercent })),
@@ -495,11 +498,13 @@ export function ContractItemsSection({
   }
 
   function selectWeightAllocationMethod(method: ContractItemWeightAllocationMethod) {
+    const existingWeightTotal = summary?.allocatedWeightPercent ?? items.reduce((sum, item) => sum + item.weightPercent, 0);
+    const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
     setWeightAllocationMethod(method);
     if (method === "EQUAL") {
       setPdfPreview((current) => {
         if (!current) return current;
-        const weights = equalWeights(current.drafts.length);
+        const weights = equalWeights(current.drafts.length, availableWeightPercent);
         return { ...current, drafts: current.drafts.map((draft, index) => ({ ...draft, weightPercent: weights[index] })) };
       });
     } else {
@@ -511,11 +516,13 @@ export function ContractItemsSection({
   }
 
   function removeDraft(index: number) {
+    const existingWeightTotal = summary?.allocatedWeightPercent ?? items.reduce((sum, item) => sum + item.weightPercent, 0);
+    const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
     setPdfPreview((current) => {
       if (!current) return current;
       const drafts = current.drafts.filter((_, draftIndex) => draftIndex !== index);
       if (weightAllocationMethod !== "EQUAL") return { ...current, drafts };
-      const weights = equalWeights(drafts.length);
+      const weights = equalWeights(drafts.length, availableWeightPercent);
       return { ...current, drafts: drafts.map((draft, draftIndex) => ({ ...draft, weightPercent: weights[draftIndex] })) };
     });
   }
@@ -577,11 +584,21 @@ export function ContractItemsSection({
 
   async function confirmPdfImport() {
     if (!pdfPreview?.drafts.length) return;
+    const existingWeightTotal = summary?.allocatedWeightPercent ?? items.reduce((sum, item) => sum + item.weightPercent, 0);
+    const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
+
     const invalid = pdfPreview.drafts.flatMap(draftProblems);
-    const weightTotal = pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0);
-    if (Math.abs(weightTotal - 100) > 0.005) invalid.push("Tổng trọng số phải bằng 100%");
+    const importWeightTotal = pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0);
+    const totalAfterImport = existingWeightTotal + importWeightTotal;
+
+    if (totalAfterImport > 100.005) {
+      invalid.push(`Tổng trọng số sau khi nhập (${totalAfterImport.toFixed(2)}%) vượt quá 100.00%`);
+    } else if (availableWeightPercent > 0 && Math.abs(importWeightTotal - availableWeightPercent) > 0.005) {
+      invalid.push(`Tổng trọng số các mục nhập (${importWeightTotal.toFixed(2)}%) phải bằng trọng số khả dụng (${availableWeightPercent.toFixed(2)}%)`);
+    }
+
     if (invalid.length) {
-      setPdfError("Còn hạng mục thiếu hoặc sai dữ liệu bắt buộc. Hãy sửa các cảnh báo màu đỏ trước khi nhập.");
+      setPdfError("Còn dữ liệu chưa hợp lệ: " + invalid.join("; ") + ".");
       return;
     }
 
@@ -993,16 +1010,56 @@ export function ContractItemsSection({
                       <p className="text-xs font-bold text-slate-800">2. Kiểm tra và chỉnh sửa {pdfPreview.drafts.length} hạng mục</p>
                       <p className="mt-1 text-[10px] text-slate-500">AI chỉ đề xuất. Các trường thiếu để trống; người dùng chịu trách nhiệm đối chiếu với hợp đồng trước khi nhập.</p>
                     </div>
-                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
-                      <p className="text-[10px] font-bold uppercase text-blue-800">3. Phương pháp phân bổ trọng số</p>
-                      <div className="mt-2 flex flex-wrap gap-4 text-[10px] text-slate-700">
-                        <label className="flex items-center gap-2"><input type="radio" checked={weightAllocationMethod === "EQUAL"} onChange={() => selectWeightAllocationMethod("EQUAL")} /> Chia đều cho tất cả hạng mục</label>
-                        <label className="flex items-center gap-2"><input type="radio" checked={weightAllocationMethod === "MANUAL"} onChange={() => selectWeightAllocationMethod("MANUAL")} /> Nhập trọng số thủ công</label>
-                      </div>
-                      <p className={`mt-2 text-[11px] font-bold ${Math.abs(pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0) - 100) <= 0.005 ? "text-emerald-700" : "text-red-700"}`}>
-                        Tổng trọng số: {pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0).toFixed(2)}% / 100.00%
-                      </p>
-                    </div>
+                    {(() => {
+                      const existingWeightTotal = summary?.allocatedWeightPercent ?? items.reduce((sum, item) => sum + item.weightPercent, 0);
+                      const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
+                      const importWeightTotal = pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0);
+                      const totalAfterImport = existingWeightTotal + importWeightTotal;
+                      const isWeightValid = availableWeightPercent > 0
+                        ? Math.abs(importWeightTotal - availableWeightPercent) <= 0.005
+                        : importWeightTotal === 0;
+
+                      return (
+                        <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                          <p className="text-[10px] font-bold uppercase text-blue-800">3. Phương pháp phân bổ trọng số</p>
+                          <div className="mt-2 flex flex-wrap gap-4 text-[10px] text-slate-700">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                disabled={availableWeightPercent <= 0}
+                                checked={weightAllocationMethod === "EQUAL"}
+                                onChange={() => selectWeightAllocationMethod("EQUAL")}
+                              />
+                              Chia đều trọng số khả dụng ({availableWeightPercent.toFixed(2)}%) cho {pdfPreview.drafts.length} hạng mục
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                checked={weightAllocationMethod === "MANUAL"}
+                                onChange={() => selectWeightAllocationMethod("MANUAL")}
+                              />
+                              Nhập trọng số thủ công
+                            </label>
+                          </div>
+                          <div className="mt-2 space-y-1 text-[11px]">
+                            {existingWeightTotal > 0 && (
+                              <p className="text-slate-600">
+                                • Trọng số hạng mục đã có trong hợp đồng: <span className="font-semibold text-slate-900">{existingWeightTotal.toFixed(2)}%</span> (trọng số còn lại khả dụng: <span className="font-semibold text-blue-800">{availableWeightPercent.toFixed(2)}%</span>)
+                              </p>
+                            )}
+                            {availableWeightPercent <= 0 ? (
+                              <p className="font-bold text-red-600">
+                                ⚠ Hợp đồng đã phân bổ đủ 100.00% trọng số cho các hạng mục hiện có. Không còn trọng số khả dụng (0.00%) để nhập thêm. Vui lòng giảm trọng số của hạng mục cũ nếu muốn nhập thêm hạng mục từ PDF.
+                              </p>
+                            ) : (
+                              <p className={`font-bold ${isWeightValid ? "text-emerald-700" : "text-red-700"}`}>
+                                Tổng trọng số các mục nhập: {importWeightTotal.toFixed(2)}% / Khả dụng: {availableWeightPercent.toFixed(2)}% (Tổng sau nhập: {totalAfterImport.toFixed(2)}% / 100.00%)
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     {pdfPreview.drafts.map((draft, index) => {
                       const problems = draftProblems(draft);
                       return (
@@ -1061,11 +1118,24 @@ export function ContractItemsSection({
 
             <div className="mt-5 flex justify-end gap-2 border-t border-slate-200 pt-4">
               <button type="button" onClick={() => setPdfOpen(false)} className="h-9 rounded-lg border border-slate-200 px-4 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Đóng</button>
-              {pdfPreview?.drafts.length ? (
-                <button type="button" disabled={pdfImporting || Math.abs(pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0) - 100) > 0.005} onClick={() => void confirmPdfImport()} className="h-9 rounded-lg bg-emerald-700 px-4 text-[11px] font-semibold text-white hover:bg-emerald-800 disabled:opacity-40">
-                  {pdfImporting ? "Đang nhập..." : `Xác nhận nhập ${pdfPreview.drafts.length} hạng mục`}
-                </button>
-              ) : null}
+              {pdfPreview?.drafts.length ? (() => {
+                const existingWeightTotal = summary?.allocatedWeightPercent ?? items.reduce((sum, item) => sum + item.weightPercent, 0);
+                const availableWeightPercent = Math.max(0, Math.round((100 - existingWeightTotal) * 100) / 100);
+                const importWeightTotal = pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0);
+                const isWeightValid = availableWeightPercent > 0
+                  ? Math.abs(importWeightTotal - availableWeightPercent) <= 0.005
+                  : false;
+                return (
+                  <button
+                    type="button"
+                    disabled={pdfImporting || availableWeightPercent <= 0 || !isWeightValid}
+                    onClick={() => void confirmPdfImport()}
+                    className="h-9 rounded-lg bg-emerald-700 px-4 text-[11px] font-semibold text-white hover:bg-emerald-800 disabled:opacity-40"
+                  >
+                    {pdfImporting ? "Đang nhập..." : `Xác nhận nhập ${pdfPreview.drafts.length} hạng mục`}
+                  </button>
+                );
+              })() : null}
             </div>
           </div>
         </div>
