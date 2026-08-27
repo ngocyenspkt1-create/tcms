@@ -1,7 +1,13 @@
 import "server-only";
 
 import type { PoolClient } from "pg";
-import type { ContractItem, ContractItemInput } from "../../types/contract-item";
+import type {
+  ContractItem,
+  ContractItemChecklistItem,
+  ContractItemDailyLog,
+  ContractItemInput,
+  ContractItemTracking,
+} from "../../types/contract-item";
 
 type ItemRow = Record<string, unknown> & { id: string; contract_id: string; sequence_number: number; version: number };
 
@@ -21,6 +27,30 @@ function mapRow(row: ItemRow): ContractItem {
     weightPercent: Number(row.weight_percent ?? 0), progressPercent: Number(row.progress_percent),
     plannedStartDate: date(row.planned_start_date), plannedEndDate: date(row.planned_end_date), actualStartDate: date(row.actual_start_date), actualEndDate: date(row.actual_end_date),
     status: row.status as ContractItem["status"], progressNote: row.progress_note as string | undefined, acceptanceStatus: row.acceptance_status as string | undefined,
+  };
+}
+
+function mapChecklistRow(row: Record<string, unknown>): ContractItemChecklistItem {
+  return {
+    id: String(row.id),
+    contractItemId: String(row.contract_item_id),
+    sequenceNumber: Number(row.sequence_number),
+    description: String(row.description),
+    isCompleted: Boolean(row.is_completed),
+    completedAt: row.completed_at ? new Date(String(row.completed_at)).toISOString() : null,
+    completedBy: row.completed_by ? String(row.completed_by) : null,
+    version: Number(row.version),
+  };
+}
+
+function mapDailyLogRow(row: Record<string, unknown>): ContractItemDailyLog {
+  return {
+    id: String(row.id),
+    contractItemId: String(row.contract_item_id),
+    logDate: date(row.log_date) ?? "",
+    note: String(row.note),
+    createdBy: String(row.created_by),
+    createdAt: new Date(String(row.created_at)).toISOString(),
   };
 }
 
@@ -62,5 +92,73 @@ export class PostgresContractItemRepository {
       [...values(input,actorId),contractId,itemId,expectedVersion]);
     if (!result.rowCount) throw new Error("CONCURRENT_UPDATE_OR_NOT_FOUND");
     return mapRow(result.rows[0] as ItemRow);
+  }
+
+  async createChecklistItems(itemId: string, descriptions: readonly string[], actorId: string) {
+    const created: ContractItemChecklistItem[] = [];
+    for (const [index, description] of descriptions.entries()) {
+      const result = await this.client.query(
+        `INSERT INTO tcms.contract_item_checklist_items
+          (contract_item_id,sequence_number,description,created_by,updated_by)
+         VALUES ($1,$2,$3,$4,$4) RETURNING *`,
+        [itemId, index + 1, description, actorId],
+      );
+      created.push(mapChecklistRow(result.rows[0] as Record<string, unknown>));
+    }
+    return created;
+  }
+
+  async getTracking(contractId: string, itemId: string): Promise<ContractItemTracking | null> {
+    const exists = await this.findById(contractId, itemId);
+    if (!exists) return null;
+    const [checklistResult, logsResult] = await Promise.all([
+      this.client.query(
+        "SELECT * FROM tcms.contract_item_checklist_items WHERE contract_item_id=$1 ORDER BY sequence_number",
+        [itemId],
+      ),
+      this.client.query(
+        "SELECT * FROM tcms.contract_item_daily_logs WHERE contract_item_id=$1 ORDER BY log_date DESC,created_at DESC",
+        [itemId],
+      ),
+    ]);
+    const checklistItems = checklistResult.rows.map((row) => mapChecklistRow(row as Record<string, unknown>));
+    const completed = checklistItems.filter((item) => item.isCompleted).length;
+    return {
+      checklistItems,
+      dailyLogs: logsResult.rows.map((row) => mapDailyLogRow(row as Record<string, unknown>)),
+      checklistCompletionPercent: checklistItems.length ? (completed / checklistItems.length) * 100 : null,
+    };
+  }
+
+  async updateChecklistCompletion(
+    contractId: string,
+    itemId: string,
+    checklistItemId: string,
+    expectedVersion: number,
+    isCompleted: boolean,
+    actorId: string,
+  ) {
+    const result = await this.client.query(
+      `UPDATE tcms.contract_item_checklist_items checklist
+       SET is_completed=$1,completed_at=CASE WHEN $1 THEN clock_timestamp() ELSE NULL END,
+           completed_by=CASE WHEN $1 THEN $2 ELSE NULL END,updated_by=$2
+       WHERE checklist.id=$3 AND checklist.contract_item_id=$4 AND checklist.version=$5
+         AND EXISTS (SELECT 1 FROM tcms.contract_items item WHERE item.id=$4 AND item.contract_id=$6 AND item.archived_at IS NULL)
+       RETURNING checklist.*`,
+      [isCompleted, actorId, checklistItemId, itemId, expectedVersion, contractId],
+    );
+    if (!result.rowCount) throw new Error("CONCURRENT_UPDATE_OR_NOT_FOUND");
+    return mapChecklistRow(result.rows[0] as Record<string, unknown>);
+  }
+
+  async appendDailyLog(contractId: string, itemId: string, logDate: string, note: string, actorId: string) {
+    const result = await this.client.query(
+      `INSERT INTO tcms.contract_item_daily_logs (contract_item_id,log_date,note,created_by)
+       SELECT item.id,$1,$2,$3 FROM tcms.contract_items item
+       WHERE item.id=$4 AND item.contract_id=$5 AND item.archived_at IS NULL RETURNING *`,
+      [logDate, note, actorId, itemId, contractId],
+    );
+    if (!result.rowCount) throw new Error("CONCURRENT_UPDATE_OR_NOT_FOUND");
+    return mapDailyLogRow(result.rows[0] as Record<string, unknown>);
   }
 }

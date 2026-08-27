@@ -1,5 +1,7 @@
 import { CONTRACT_ITEM_STATUSES, type ContractItem, type ContractItemInput, type ContractItemSummary } from "../../types/contract-item.ts";
 
+const WEIGHT_TOLERANCE = 0.005;
+
 function optionalText(value: unknown) {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value !== "string") throw new SyntaxError("INVALID_CONTRACT_ITEM_FIELDS");
@@ -48,4 +50,53 @@ export function summarizeContractItems(items: readonly ContractItem[]): Contract
     weightedProgressPercent: weightComplete ? items.reduce((sum, item) => sum + item.progressPercent * item.weightPercent, 0) / 100 : null,
     weightComplete,
   };
+}
+
+export function splitWorkContentIntoChecklistItems(value: string | null | undefined) {
+  const text = value?.trim();
+  if (!text) return [];
+
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const marker = /^(?:[-*•]|(?:\d+|[A-Za-z])[.)])\s+(.+)$/;
+  const matches = lines.map((line) => line.match(marker));
+  if (lines.length >= 2 && matches.every(Boolean)) {
+    return matches.map((match) => match?.[1].trim() ?? "").filter(Boolean);
+  }
+  return [text];
+}
+
+export function allocateEqualWeights(itemCount: number) {
+  if (!Number.isInteger(itemCount) || itemCount <= 0) throw new SyntaxError("IMPORT_ITEMS_REQUIRED");
+  const totalHundredths = 10_000;
+  const base = Math.floor(totalHundredths / itemCount);
+  return Array.from({ length: itemCount }, (_, index) =>
+    (index === itemCount - 1 ? totalHundredths - base * (itemCount - 1) : base) / 100,
+  );
+}
+
+export function validateImportWeightTotal(weights: readonly number[]) {
+  if (!weights.length || weights.some((weight) => !Number.isFinite(weight) || weight < 0 || weight > 100)) {
+    throw new SyntaxError("INVALID_IMPORT_WEIGHTS");
+  }
+  const total = weights.reduce((sum, weight) => sum + weight, 0);
+  if (Math.abs(total - 100) > WEIGHT_TOLERANCE) throw new SyntaxError("INVALID_IMPORT_WEIGHT_TOTAL");
+}
+
+export function parseChecklistCompletionInput(value: unknown) {
+  if (!value || typeof value !== "object") throw new SyntaxError("INVALID_JSON");
+  const raw = value as { isCompleted?: unknown; expectedVersion?: unknown };
+  if (typeof raw.isCompleted !== "boolean" || !Number.isInteger(raw.expectedVersion) || Number(raw.expectedVersion) <= 0) {
+    throw new SyntaxError("INVALID_CHECKLIST_UPDATE");
+  }
+  return { isCompleted: raw.isCompleted, expectedVersion: Number(raw.expectedVersion) };
+}
+
+export function parseDailyLogInput(value: unknown) {
+  if (!value || typeof value !== "object") throw new SyntaxError("INVALID_JSON");
+  const raw = value as { logDate?: unknown; note?: unknown };
+  const note = optionalText(raw.note);
+  if (typeof raw.logDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.logDate) || !note) {
+    throw new SyntaxError("INVALID_DAILY_LOG");
+  }
+  return { logDate: raw.logDate, note };
 }

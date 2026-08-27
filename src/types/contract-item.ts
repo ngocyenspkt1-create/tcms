@@ -27,6 +27,32 @@ export interface ContractItem {
   version: number;
 }
 
+export interface ContractItemChecklistItem {
+  id: string;
+  contractItemId: string;
+  sequenceNumber: number;
+  description: string;
+  isCompleted: boolean;
+  completedAt: string | null;
+  completedBy: string | null;
+  version: number;
+}
+
+export interface ContractItemDailyLog {
+  id: string;
+  contractItemId: string;
+  logDate: string;
+  note: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface ContractItemTracking {
+  checklistItems: ContractItemChecklistItem[];
+  dailyLogs: ContractItemDailyLog[];
+  checklistCompletionPercent: number | null;
+}
+
 export type ContractItemInput = Omit<ContractItem, "id" | "contractId" | "sequenceNumber" | "version">;
 
 export type ContractItemSummary = {

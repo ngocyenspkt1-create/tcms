@@ -16,10 +16,14 @@ export function requireRolePermission(principal: SecurityPrincipal, permission: 
 }
 
 export function requireContractPermission(principal: SecurityPrincipal, permission: Permission, contract: Contract) {
+  if (!canContractPermission(principal, permission, contract)) throw new Error("ACCESS_DENIED");
+}
+
+export function canContractPermission(principal: SecurityPrincipal, permission: Permission, contract: Contract) {
   const decision = authorize(principal, permission, {
     id: contract.id,
     departmentIds: principal.departmentIds,
     status: contract.status,
   });
-  if (!decision.allowed) throw new Error("ACCESS_DENIED");
+  return decision.allowed;
 }

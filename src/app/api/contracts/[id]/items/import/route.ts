@@ -5,13 +5,13 @@ import { PostgresContractRepository } from "@/server/contracts/postgres-contract
 import { withSecurityTransaction } from "@/server/db/security-transaction";
 import { apiError } from "@/server/http/api-response";
 import { getRequestContext } from "@/server/http/request-context";
-import { parseContractItemImport } from "@/server/pdf/contract-item-import";
+import { parseContractItemImportRequest } from "@/server/pdf/contract-item-import";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const context = await getRequestContext(request);
     const { id } = await params;
-    const inputs = parseContractItemImport(await request.json());
+    const entries = parseContractItemImportRequest(await request.json());
     const result = await withSecurityTransaction(context, async (client) => {
       const contract = await new PostgresContractRepository(client).findById(id);
       if (!contract) return null;
@@ -19,7 +19,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
       const repository = new PostgresContractItemRepository(client);
       const created = [];
-      for (const input of inputs) created.push(await repository.create(id, input, context.principal.userId));
+      for (const entry of entries) {
+        const item = await repository.create(id, entry.input, context.principal.userId);
+        await repository.createChecklistItems(item.id, entry.checklistItems, context.principal.userId);
+        created.push(item);
+      }
       const items = await repository.list(id);
       return { created, summary: summarizeContractItems(items) };
     });

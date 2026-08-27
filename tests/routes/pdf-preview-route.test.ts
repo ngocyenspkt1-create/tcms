@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   parseContractItemImport,
+  parseContractItemImportRequest,
   toImportDrafts,
   validatePdfSignature,
   validatePdfUpload,
@@ -25,7 +26,33 @@ test("AI extraction keeps missing values visible for user validation", () => {
   assert.equal(drafts[0].status, "NOT_STARTED");
   assert.equal(drafts[0].progressPercent, 0);
   assert.equal(drafts[0].weightPercent, null);
+  assert.deepEqual(drafts[0].checklistItems, []);
   assert.ok(drafts[0].issues.some((issue) => issue.includes("trọng số")));
+});
+
+test("PDF import creates safe checklist drafts and validates weight allocation", () => {
+  const drafts = toImportDrafts([{
+    itemCode: null, groupCode: null, groupName: null, serviceDescription: "Bảo dưỡng bơm",
+    workContent: "1. Cô lập thiết bị\n2. Bảo dưỡng\n3. Chạy thử", quantity: 1, unit: "bộ",
+    serviceLocation: null, completionDurationDays: 3, weightPercent: null,
+    plannedStartDate: null, plannedEndDate: null, sourcePage: 2, evidence: "Phạm vi công việc", confidence: 0.95,
+  }]);
+  assert.deepEqual(drafts[0].checklistItems, ["Cô lập thiết bị", "Bảo dưỡng", "Chạy thử"]);
+
+  const equal = parseContractItemImportRequest({
+    weightAllocationMethod: "EQUAL",
+    items: [
+      { serviceDescription: "A", checklistItems: ["A1"], weightPercent: null, progressPercent: 0, status: "NOT_STARTED" },
+      { serviceDescription: "B", checklistItems: ["B1"], weightPercent: null, progressPercent: 0, status: "NOT_STARTED" },
+      { serviceDescription: "C", checklistItems: ["C1"], weightPercent: null, progressPercent: 0, status: "NOT_STARTED" },
+    ],
+  });
+  assert.deepEqual(equal.map((entry) => entry.input.weightPercent), [33.33, 33.33, 33.34]);
+  assert.deepEqual(equal[0].checklistItems, ["A1"]);
+  assert.throws(() => parseContractItemImportRequest({
+    weightAllocationMethod: "MANUAL",
+    items: [{ serviceDescription: "A", weightPercent: 99, progressPercent: 0, status: "NOT_STARTED" }],
+  }), SyntaxError);
 });
 
 test("confirmed import is validated again as ContractItem input", () => {

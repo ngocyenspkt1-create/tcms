@@ -1,6 +1,12 @@
 import type { ContractItemInput } from "../../types/contract-item";
 import type { ContractItemImportDraft } from "../../types/contract-item-import";
-import { parseContractItemInput } from "../contracts/contract-item-service.ts";
+import {
+  allocateEqualWeights,
+  parseContractItemInput,
+  splitWorkContentIntoChecklistItems,
+  validateImportWeightTotal,
+} from "../contracts/contract-item-service.ts";
+import type { ContractItemWeightAllocationMethod } from "../../types/contract-item-import";
 
 export const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024;
 export const MAX_IMPORT_ITEMS = 100;
@@ -70,6 +76,7 @@ export function toImportDrafts(items: readonly ExtractedContractItem[]): Contrac
     groupName: text(item.groupName),
     serviceDescription: text(item.serviceDescription),
     workContent: text(item.workContent),
+    checklistItems: splitWorkContentIntoChecklistItems(item.workContent),
     quantity: item.quantity,
     unit: text(item.unit),
     serviceLocation: text(item.serviceLocation),
@@ -92,4 +99,42 @@ export function parseContractItemImport(value: unknown): ContractItemInput[] {
   if (!Array.isArray(items) || items.length === 0) throw new SyntaxError("IMPORT_ITEMS_REQUIRED");
   if (items.length > MAX_IMPORT_ITEMS) throw new SyntaxError("TOO_MANY_IMPORT_ITEMS");
   return items.map((item) => parseContractItemInput(item));
+}
+
+export type ParsedContractItemImport = {
+  input: ContractItemInput;
+  checklistItems: string[];
+};
+
+export function parseContractItemImportRequest(value: unknown): ParsedContractItemImport[] {
+  if (!value || typeof value !== "object") throw new SyntaxError("INVALID_JSON");
+  const raw = value as { items?: unknown; weightAllocationMethod?: unknown };
+  if (!Array.isArray(raw.items) || raw.items.length === 0) throw new SyntaxError("IMPORT_ITEMS_REQUIRED");
+  if (raw.items.length > MAX_IMPORT_ITEMS) throw new SyntaxError("TOO_MANY_IMPORT_ITEMS");
+  if (raw.weightAllocationMethod !== "EQUAL" && raw.weightAllocationMethod !== "MANUAL") {
+    throw new SyntaxError("INVALID_WEIGHT_ALLOCATION_METHOD");
+  }
+
+  const method = raw.weightAllocationMethod as ContractItemWeightAllocationMethod;
+  const equalWeights = method === "EQUAL" ? allocateEqualWeights(raw.items.length) : null;
+  const prepared = raw.items.map((item, index) => {
+    if (!item || typeof item !== "object") throw new SyntaxError("INVALID_CONTRACT_ITEM_FIELDS");
+    const itemRaw = item as Record<string, unknown>;
+    const checklistRaw = itemRaw.checklistItems;
+    const checklistItems = checklistRaw === undefined
+      ? splitWorkContentIntoChecklistItems(typeof itemRaw.workContent === "string" ? itemRaw.workContent : null)
+      : Array.isArray(checklistRaw)
+        ? checklistRaw.map((entry) => typeof entry === "string" ? entry.trim() : "").filter(Boolean)
+        : (() => { throw new SyntaxError("INVALID_CHECKLIST_ITEMS"); })();
+    if (checklistItems.length > 100) throw new SyntaxError("TOO_MANY_CHECKLIST_ITEMS");
+    return {
+      input: parseContractItemInput({
+        ...itemRaw,
+        weightPercent: equalWeights ? equalWeights[index] : itemRaw.weightPercent,
+      }),
+      checklistItems,
+    };
+  });
+  validateImportWeightTotal(prepared.map((entry) => entry.input.weightPercent));
+  return prepared;
 }

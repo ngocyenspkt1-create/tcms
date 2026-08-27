@@ -9,6 +9,7 @@ export interface ContractItemImportDraft {
   groupName: string;
   serviceDescription: string;
   workContent: string;
+  checklistItems: string[];
   quantity: number | null;
   unit: string;
   serviceLocation: string;
@@ -23,6 +24,8 @@ export interface ContractItemImportDraft {
   confidence: number | null;
   issues: string[];
 }
+
+export type ContractItemWeightAllocationMethod = "EQUAL" | "MANUAL";
 
 export interface PdfImportPreviewResponse {
   file: { name: string; size: number; type: string };

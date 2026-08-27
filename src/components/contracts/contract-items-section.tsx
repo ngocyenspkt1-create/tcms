@@ -8,12 +8,14 @@ import {
 
 import type {
   ContractItem,
+  ContractItemTracking,
   ContractItemInput,
   ContractItemStatus,
   ContractItemSummary,
 } from "@/types/contract-item";
 import type {
   ContractItemImportDraft,
+  ContractItemWeightAllocationMethod,
   PdfImportPreviewResponse,
 } from "@/types/contract-item-import";
 
@@ -146,6 +148,14 @@ const inputClass =
 const textareaClass =
   "w-full rounded-lg border border-slate-200 bg-white p-2 text-[11px] outline-none focus:border-blue-500";
 
+function equalWeights(itemCount: number) {
+  if (!itemCount) return [];
+  const base = Math.floor(10_000 / itemCount);
+  return Array.from({ length: itemCount }, (_, index) =>
+    (index === itemCount - 1 ? 10_000 - base * (itemCount - 1) : base) / 100,
+  );
+}
+
 function formatFileSize(
   bytes: number,
 ) {
@@ -180,6 +190,18 @@ export function ContractItemsSection({
     useState<ContractItemSummary | null>(
       null,
     );
+
+  const [capabilities, setCapabilities] = useState({
+    canUpdateIdentity: false,
+    canUpdateProgress: false,
+  });
+
+  const [trackingItem, setTrackingItem] = useState<ContractItem | null>(null);
+  const [tracking, setTracking] = useState<ContractItemTracking | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingSaving, setTrackingSaving] = useState(false);
+  const [dailyLogDate, setDailyLogDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dailyLogNote, setDailyLogNote] = useState("");
 
   const [editing, setEditing] =
     useState<ContractItem | null>(null);
@@ -228,6 +250,9 @@ export function ContractItemsSection({
 
   const [redactionConfirmed, setRedactionConfirmed] = useState(false);
   const [pdfImporting, setPdfImporting] = useState(false);
+  const [weightAllocationMethod, setWeightAllocationMethod] =
+    useState<ContractItemWeightAllocationMethod>("EQUAL");
+  const [suggestedWeights, setSuggestedWeights] = useState<Record<string, number | null>>({});
 
   const load = useCallback(
     async () => {
@@ -237,6 +262,7 @@ export function ContractItemsSection({
         const data = await readJson<{
           items: ContractItem[];
           summary: ContractItemSummary;
+          capabilities: { canUpdateIdentity: boolean; canUpdateProgress: boolean };
         }>(
           await fetch(
             `/api/contracts/${encodeURIComponent(
@@ -250,6 +276,7 @@ export function ContractItemsSection({
 
         setItems(data.items);
         setSummary(data.summary);
+        setCapabilities(data.capabilities);
       } catch (e) {
         setError(
           e instanceof Error
@@ -307,6 +334,8 @@ export function ContractItemsSection({
     setPdfPreview(null);
     setPdfError(null);
     setRedactionConfirmed(false);
+    setWeightAllocationMethod("EQUAL");
+    setSuggestedWeights({});
     setPdfOpen(true);
   }
 
@@ -428,7 +457,12 @@ export function ContractItemsSection({
           ),
         );
 
-      setPdfPreview(result);
+      setSuggestedWeights(Object.fromEntries(result.drafts.map((draft) => [draft.draftId, draft.weightPercent])));
+      const weights = equalWeights(result.drafts.length);
+      setPdfPreview({
+        ...result,
+        drafts: result.drafts.map((draft, index) => ({ ...draft, weightPercent: weights[index] ?? draft.weightPercent })),
+      });
     } catch (e) {
       setPdfError(
         e instanceof Error
@@ -450,15 +484,102 @@ export function ContractItemsSection({
   }
 
   function updateDraft<K extends keyof ContractItemImportDraft>(index: number, key: K, value: ContractItemImportDraft[K]) {
+    if (key === "weightPercent" && weightAllocationMethod === "MANUAL") {
+      const draftId = pdfPreview?.drafts[index]?.draftId;
+      if (draftId) setSuggestedWeights((current) => ({ ...current, [draftId]: value as number | null }));
+    }
     setPdfPreview((current) => current ? {
       ...current,
       drafts: current.drafts.map((draft, draftIndex) => draftIndex === index ? { ...draft, [key]: value } : draft),
     } : current);
   }
 
+  function selectWeightAllocationMethod(method: ContractItemWeightAllocationMethod) {
+    setWeightAllocationMethod(method);
+    if (method === "EQUAL") {
+      setPdfPreview((current) => {
+        if (!current) return current;
+        const weights = equalWeights(current.drafts.length);
+        return { ...current, drafts: current.drafts.map((draft, index) => ({ ...draft, weightPercent: weights[index] })) };
+      });
+    } else {
+      setPdfPreview((current) => current ? {
+        ...current,
+        drafts: current.drafts.map((draft) => ({ ...draft, weightPercent: suggestedWeights[draft.draftId] ?? null })),
+      } : current);
+    }
+  }
+
+  function removeDraft(index: number) {
+    setPdfPreview((current) => {
+      if (!current) return current;
+      const drafts = current.drafts.filter((_, draftIndex) => draftIndex !== index);
+      if (weightAllocationMethod !== "EQUAL") return { ...current, drafts };
+      const weights = equalWeights(drafts.length);
+      return { ...current, drafts: drafts.map((draft, draftIndex) => ({ ...draft, weightPercent: weights[draftIndex] })) };
+    });
+  }
+
+  async function openTracking(item: ContractItem) {
+    setTrackingItem(item);
+    setTracking(null);
+    setTrackingLoading(true);
+    setError(null);
+    try {
+      const data = await readJson<{ tracking: ContractItemTracking; capabilities: { canUpdateProgress: boolean } }>(
+        await fetch(`/api/contracts/${encodeURIComponent(contractId)}/items/${encodeURIComponent(item.id)}/tracking`, { cache: "no-store" }),
+      );
+      setTracking(data.tracking);
+      setCapabilities((current) => ({ ...current, canUpdateProgress: data.capabilities.canUpdateProgress }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thể tải checklist và nhật ký.");
+      setTrackingItem(null);
+    } finally {
+      setTrackingLoading(false);
+    }
+  }
+
+  async function toggleChecklist(checklistItemId: string, expectedVersion: number, isCompleted: boolean) {
+    if (!trackingItem) return;
+    setTrackingSaving(true);
+    setError(null);
+    try {
+      await readJson(await fetch(
+        `/api/contracts/${encodeURIComponent(contractId)}/items/${encodeURIComponent(trackingItem.id)}/checklist/${encodeURIComponent(checklistItemId)}`,
+        { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ isCompleted, expectedVersion }) },
+      ));
+      await openTracking(trackingItem);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thể cập nhật checklist.");
+    } finally {
+      setTrackingSaving(false);
+    }
+  }
+
+  async function appendDailyLog(event: React.FormEvent) {
+    event.preventDefault();
+    if (!trackingItem || !dailyLogNote.trim()) return;
+    setTrackingSaving(true);
+    setError(null);
+    try {
+      await readJson(await fetch(
+        `/api/contracts/${encodeURIComponent(contractId)}/items/${encodeURIComponent(trackingItem.id)}/daily-logs`,
+        { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ logDate: dailyLogDate, note: dailyLogNote }) },
+      ));
+      setDailyLogNote("");
+      await openTracking(trackingItem);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thể thêm nhật ký.");
+    } finally {
+      setTrackingSaving(false);
+    }
+  }
+
   async function confirmPdfImport() {
     if (!pdfPreview?.drafts.length) return;
     const invalid = pdfPreview.drafts.flatMap(draftProblems);
+    const weightTotal = pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0);
+    if (Math.abs(weightTotal - 100) > 0.005) invalid.push("Tổng trọng số phải bằng 100%");
     if (invalid.length) {
       setPdfError("Còn hạng mục thiếu hoặc sai dữ liệu bắt buộc. Hãy sửa các cảnh báo màu đỏ trước khi nhập.");
       return;
@@ -473,9 +594,9 @@ export function ContractItemsSection({
         groupName: draft.groupName || undefined,
         serviceDescription: draft.serviceDescription,
         workContent: draft.workContent || undefined,
+        checklistItems: draft.checklistItems,
         quantity: draft.quantity ?? undefined,
         unit: draft.unit || undefined,
-        serviceLocation: draft.serviceLocation || undefined,
         completionDurationDays: draft.completionDurationDays ?? undefined,
         weightPercent: draft.weightPercent as number,
         progressPercent: draft.progressPercent,
@@ -486,7 +607,7 @@ export function ContractItemsSection({
       await readJson(await fetch(`/api/contracts/${encodeURIComponent(contractId)}/items/import`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, weightAllocationMethod }),
       }));
       setPdfOpen(false);
       await Promise.all([load(), onContractChanged()]);
@@ -513,7 +634,7 @@ export function ContractItemsSection({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        {capabilities.canUpdateIdentity && <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={startPdfImport}
@@ -529,7 +650,7 @@ export function ContractItemsSection({
           >
             + Thêm hạng mục
           </button>
-        </div>
+        </div>}
       </div>
 
       <div className="p-4">
@@ -708,6 +829,14 @@ export function ContractItemsSection({
                     <td className="px-2 py-2">
                       <button
                         type="button"
+                        onClick={() => void openTracking(item)}
+                        className="mr-3 font-semibold text-emerald-700 hover:underline"
+                      >
+                        Chi tiết
+                      </button>
+
+                      {(capabilities.canUpdateIdentity || capabilities.canUpdateProgress) && <button
+                        type="button"
                         onClick={() =>
                           startEdit(
                             item,
@@ -716,7 +845,7 @@ export function ContractItemsSection({
                         className="font-semibold text-blue-700 hover:underline"
                       >
                         Chỉnh sửa
-                      </button>
+                      </button>}
                     </td>
                   </tr>
                 ),
@@ -739,6 +868,73 @@ export function ContractItemsSection({
               </p>
             )}
         </div>
+
+        {trackingItem && (
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xs font-bold text-slate-900">Chi tiết: {trackingItem.serviceDescription}</h3>
+                <p className="mt-1 text-[10px] text-slate-500">
+                  Tiến độ đánh giá chính thức vẫn là {trackingItem.progressPercent}%; checklist chỉ là KPI tham khảo.
+                </p>
+              </div>
+              <button type="button" onClick={() => { setTrackingItem(null); setTracking(null); }} className="text-[10px] font-semibold text-slate-500">Đóng</button>
+            </div>
+
+            {trackingLoading && <p className="mt-3 text-[10px] text-slate-500">Đang tải chi tiết...</p>}
+            {tracking && (
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[11px] font-bold text-slate-800">Checklist nội dung công việc</h4>
+                    <span className="text-[10px] font-bold text-blue-700">
+                      {tracking.checklistCompletionPercent === null ? "Chưa có" : `${tracking.checklistCompletionPercent.toFixed(0)}%`}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {tracking.checklistItems.map((checklistItem) => (
+                      <label key={checklistItem.id} className="flex items-start gap-2 rounded-lg border border-slate-100 p-2 text-[10px] text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={checklistItem.isCompleted}
+                          disabled={!capabilities.canUpdateProgress || trackingSaving}
+                          onChange={(event) => void toggleChecklist(checklistItem.id, checklistItem.version, event.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          <span className={checklistItem.isCompleted ? "line-through text-slate-400" : ""}>{checklistItem.sequenceNumber}. {checklistItem.description}</span>
+                          {checklistItem.completedAt && <span className="mt-0.5 block text-[9px] text-slate-400">Hoàn thành: {new Date(checklistItem.completedAt).toLocaleString("vi-VN")} · {checklistItem.completedBy}</span>}
+                        </span>
+                      </label>
+                    ))}
+                    {!tracking.checklistItems.length && <p className="text-[10px] text-slate-500">Chưa có checklist cho hạng mục này.</p>}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-slate-200 bg-white p-3">
+                  <h4 className="text-[11px] font-bold text-slate-800">Nhật ký tình trạng hằng ngày</h4>
+                  {capabilities.canUpdateProgress && (
+                    <form onSubmit={appendDailyLog} className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
+                      <input type="date" required className={inputClass} value={dailyLogDate} onChange={(event) => setDailyLogDate(event.target.value)} />
+                      <textarea required rows={3} className={textareaClass} value={dailyLogNote} onChange={(event) => setDailyLogNote(event.target.value)} placeholder="Cập nhật tình trạng hôm nay..." />
+                      <div className="flex justify-end"><button disabled={trackingSaving || !dailyLogNote.trim()} className="h-8 rounded-lg bg-blue-700 px-3 text-[10px] font-semibold text-white disabled:opacity-40">Thêm nhật ký</button></div>
+                    </form>
+                  )}
+                  <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
+                    {tracking.dailyLogs.map((log) => (
+                      <article key={log.id} className="rounded-lg border border-slate-100 p-2 text-[10px]">
+                        <p className="font-bold text-slate-700">{log.logDate} · {log.createdBy}</p>
+                        <p className="mt-1 whitespace-pre-wrap text-slate-600">{log.note}</p>
+                        <p className="mt-1 text-[9px] text-slate-400">{new Date(log.createdAt).toLocaleString("vi-VN")}</p>
+                      </article>
+                    ))}
+                    {!tracking.dailyLogs.length && <p className="text-[10px] text-slate-500">Chưa có nhật ký.</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* PDF import modal */}
@@ -797,13 +993,23 @@ export function ContractItemsSection({
                       <p className="text-xs font-bold text-slate-800">2. Kiểm tra và chỉnh sửa {pdfPreview.drafts.length} hạng mục</p>
                       <p className="mt-1 text-[10px] text-slate-500">AI chỉ đề xuất. Các trường thiếu để trống; người dùng chịu trách nhiệm đối chiếu với hợp đồng trước khi nhập.</p>
                     </div>
+                    <div className="rounded-xl border border-blue-200 bg-blue-50 p-3">
+                      <p className="text-[10px] font-bold uppercase text-blue-800">3. Phương pháp phân bổ trọng số</p>
+                      <div className="mt-2 flex flex-wrap gap-4 text-[10px] text-slate-700">
+                        <label className="flex items-center gap-2"><input type="radio" checked={weightAllocationMethod === "EQUAL"} onChange={() => selectWeightAllocationMethod("EQUAL")} /> Chia đều cho tất cả hạng mục</label>
+                        <label className="flex items-center gap-2"><input type="radio" checked={weightAllocationMethod === "MANUAL"} onChange={() => selectWeightAllocationMethod("MANUAL")} /> Nhập trọng số thủ công</label>
+                      </div>
+                      <p className={`mt-2 text-[11px] font-bold ${Math.abs(pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0) - 100) <= 0.005 ? "text-emerald-700" : "text-red-700"}`}>
+                        Tổng trọng số: {pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0).toFixed(2)}% / 100.00%
+                      </p>
+                    </div>
                     {pdfPreview.drafts.map((draft, index) => {
                       const problems = draftProblems(draft);
                       return (
                         <div key={draft.draftId} className="rounded-xl border border-slate-200 p-4">
                           <div className="mb-3 flex items-center justify-between">
                             <p className="text-xs font-bold text-slate-800">Hạng mục {index + 1}</p>
-                            <button type="button" onClick={() => setPdfPreview((current) => current ? { ...current, drafts: current.drafts.filter((_, i) => i !== index) } : current)} className="text-[10px] font-semibold text-red-600">Loại khỏi danh sách</button>
+                            <button type="button" onClick={() => removeDraft(index)} className="text-[10px] font-semibold text-red-600">Loại khỏi danh sách</button>
                           </div>
                           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <Field label="Mã hạng mục"><input className={inputClass} value={draft.itemCode} onChange={(e) => updateDraft(index, "itemCode", e.target.value)} /></Field>
@@ -811,12 +1017,27 @@ export function ContractItemsSection({
                             <Field label="Tên/nội dung hạng mục" wide><input className={inputClass} value={draft.serviceDescription} onChange={(e) => updateDraft(index, "serviceDescription", e.target.value)} /></Field>
                             <Field label="Khối lượng"><input type="number" min="0" step="any" className={inputClass} value={draft.quantity ?? ""} onChange={(e) => updateDraft(index, "quantity", e.target.value === "" ? null : Number(e.target.value))} /></Field>
                             <Field label="Đơn vị"><input className={inputClass} value={draft.unit} onChange={(e) => updateDraft(index, "unit", e.target.value)} /></Field>
-                            <Field label="Trọng số (%)"><input type="number" min="0" max="100" step="any" className={inputClass} value={draft.weightPercent ?? ""} onChange={(e) => updateDraft(index, "weightPercent", e.target.value === "" ? null : Number(e.target.value))} /></Field>
+                            <Field label="Trọng số (%)"><input type="number" min="0" max="100" step="0.01" disabled={weightAllocationMethod === "EQUAL"} className={inputClass} value={draft.weightPercent ?? ""} onChange={(e) => updateDraft(index, "weightPercent", e.target.value === "" ? null : Number(e.target.value))} /></Field>
                             <Field label="Thời lượng (ngày)"><input type="number" min="1" step="1" className={inputClass} value={draft.completionDurationDays ?? ""} onChange={(e) => updateDraft(index, "completionDurationDays", e.target.value === "" ? null : Number(e.target.value))} /></Field>
                             <Field label="Ngày bắt đầu KH"><input type="date" className={inputClass} value={draft.plannedStartDate} onChange={(e) => updateDraft(index, "plannedStartDate", e.target.value)} /></Field>
                             <Field label="Ngày kết thúc KH"><input type="date" className={inputClass} value={draft.plannedEndDate} onChange={(e) => updateDraft(index, "plannedEndDate", e.target.value)} /></Field>
-                            <Field label="Địa điểm"><input className={inputClass} value={draft.serviceLocation} onChange={(e) => updateDraft(index, "serviceLocation", e.target.value)} /></Field>
                             <Field label="Nội dung chi tiết" wide><textarea rows={2} className={textareaClass} value={draft.workContent} onChange={(e) => updateDraft(index, "workContent", e.target.value)} /></Field>
+                          </div>
+                          <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-[10px] font-bold text-slate-700">Checklist sẽ tạo khi xác nhận nhập</p>
+                              <button type="button" onClick={() => updateDraft(index, "checklistItems", [...draft.checklistItems, ""])} className="text-[10px] font-semibold text-blue-700">+ Thêm nội dung</button>
+                            </div>
+                            <div className="mt-2 space-y-2">
+                              {draft.checklistItems.map((description, checklistIndex) => (
+                                <div key={`${draft.draftId}-checklist-${checklistIndex}`} className="flex items-center gap-2">
+                                  <span className="w-5 text-[10px] font-bold text-slate-400">{checklistIndex + 1}.</span>
+                                  <input className={inputClass} value={description} onChange={(event) => updateDraft(index, "checklistItems", draft.checklistItems.map((entry, entryIndex) => entryIndex === checklistIndex ? event.target.value : entry))} />
+                                  <button type="button" onClick={() => updateDraft(index, "checklistItems", draft.checklistItems.filter((_, entryIndex) => entryIndex !== checklistIndex))} className="text-[10px] font-semibold text-red-600">Bỏ</button>
+                                </div>
+                              ))}
+                              {!draft.checklistItems.length && <p className="text-[10px] text-slate-500">Không có nội dung công việc để tạo checklist.</p>}
+                            </div>
                           </div>
                           <div className="mt-3 rounded-lg bg-slate-50 p-3 text-[10px] text-slate-600">
                             <p><b>Căn cứ:</b> {draft.evidence || "Không có trích dẫn"}{draft.sourcePage ? ` (trang ${draft.sourcePage})` : ""}</p>
@@ -841,7 +1062,7 @@ export function ContractItemsSection({
             <div className="mt-5 flex justify-end gap-2 border-t border-slate-200 pt-4">
               <button type="button" onClick={() => setPdfOpen(false)} className="h-9 rounded-lg border border-slate-200 px-4 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">Đóng</button>
               {pdfPreview?.drafts.length ? (
-                <button type="button" disabled={pdfImporting} onClick={() => void confirmPdfImport()} className="h-9 rounded-lg bg-emerald-700 px-4 text-[11px] font-semibold text-white hover:bg-emerald-800 disabled:opacity-40">
+                <button type="button" disabled={pdfImporting || Math.abs(pdfPreview.drafts.reduce((sum, draft) => sum + (draft.weightPercent ?? 0), 0) - 100) > 0.005} onClick={() => void confirmPdfImport()} className="h-9 rounded-lg bg-emerald-700 px-4 text-[11px] font-semibold text-white hover:bg-emerald-800 disabled:opacity-40">
                   {pdfImporting ? "Đang nhập..." : `Xác nhận nhập ${pdfPreview.drafts.length} hạng mục`}
                 </button>
               ) : null}
@@ -902,27 +1123,6 @@ export function ContractItemsSection({
                     ) =>
                       set(
                         "itemCode",
-                        e.target
-                          .value,
-                      )
-                    }
-                  />
-                </Field>
-
-                <Field label="Địa điểm thực hiện">
-                  <input
-                    className={
-                      inputClass
-                    }
-                    value={
-                      form.serviceLocation ??
-                      ""
-                    }
-                    onChange={(
-                      e,
-                    ) =>
-                      set(
-                        "serviceLocation",
                         e.target
                           .value,
                       )
