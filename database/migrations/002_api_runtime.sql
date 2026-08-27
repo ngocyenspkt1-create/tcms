@@ -8,7 +8,7 @@ END $$;
 
 INSERT INTO tcms.departments (code, name) VALUES
   ('PXVH1', 'Phân xưởng Vận hành 1'), ('PXSCCN', 'Phân xưởng Sửa chữa Cơ nhiệt'),
-  ('PXSCĐTĐ', 'Phân xưởng Sửa chữa Điện - Tự động'), ('PKT', 'Phòng Kỹ thuật'), ('PAT', 'Phòng An toàn')
+  ('PXSCĐTĐ', 'Phân xưởng Sửa chữa Điện - Tự động'), ('P.KTAT', 'Phòng Kỹ thuật - An toàn'), ('PAT', 'Phòng An toàn')
 ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name, active = true;
 
 CREATE OR REPLACE FUNCTION tcms.enforce_contract_column_permissions()

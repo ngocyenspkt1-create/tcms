@@ -1,6 +1,6 @@
 import type { ContractItemStatus } from "./contract-item";
 
-export type PdfImportSource = "openai" | "text" | "ocr";
+export type PdfImportSource = "ai" | "openai" | "text" | "ocr";
 
 export interface ContractItemImportDraft {
   draftId: string;

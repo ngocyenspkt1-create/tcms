@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import type {
   ContractItemExtractionResult,
   ContractItemPdfProvider,
+  ExtractedContractDraft,
   ExtractedContractItem,
 } from "./contract-item-import";
 
@@ -12,11 +13,33 @@ const DEFAULT_GEMINI_FALLBACK_MODELS = [
   "gemini-3.5-flash",
 ] as const;
 
-const DEFAULT_TIMEOUT_MS = 45_000;
+const DEFAULT_TIMEOUT_MS = 90_000;
 
-const nullable = (type: "string" | "number" | "integer") => ({
+const nullable = (type: "string" | "number" | "integer" | "boolean") => ({
   type: [type, "null"],
 });
+
+const geminiExtractedContractProperties = {
+  contractNumber: nullable("string"),
+  packageName: nullable("string"),
+  leadDepartment: nullable("string"),
+  contractorName: nullable("string"),
+  contractorAddress: nullable("string"),
+  contractorPhone: nullable("string"),
+  contractorRepresentative: nullable("string"),
+  handoverDocument: nullable("string"),
+  handoverDate: nullable("string"),
+  contractDurationDays: nullable("integer"),
+  serviceDurationText: nullable("string"),
+  contractStartDate: nullable("string"),
+  siteHandoverDate: nullable("string"),
+  goodsEndDate: nullable("string"),
+  serviceEndDate: nullable("string"),
+  contractEndDate: nullable("string"),
+  isExtended: nullable("boolean"),
+  extendedUntil: nullable("string"),
+  implementationInvitationDate: nullable("string"),
+};
 
 // Keep the Gemini schema deliberately simple. Gemini supports only a subset of
 // JSON Schema and rejects the more constrained OpenAI schema as too complex.
@@ -65,6 +88,19 @@ const geminiContractItemExtractionSchema = {
     },
   },
   required: ["items"],
+};
+
+const geminiContractCreationExtractionSchema = {
+  type: "object",
+  properties: {
+    contract: {
+      type: "object",
+      properties: geminiExtractedContractProperties,
+      required: Object.keys(geminiExtractedContractProperties),
+    },
+    items: geminiContractItemExtractionSchema.properties.items,
+  },
+  required: ["contract", "items"],
 };
 
 type GeminiResponse = {
@@ -193,6 +229,16 @@ function parseTimeout(val: string | undefined, defaultMs: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultMs;
 }
 
+function thinkingConfigForModel(model: string) {
+  if (model.startsWith("gemini-2.5-flash")) {
+    return { thinkingBudget: 0 };
+  }
+  if (model === "gemini-flash-latest" || model.startsWith("gemini-3.7")) {
+    return { thinkingLevel: "low" };
+  }
+  return { thinkingLevel: "minimal" };
+}
+
 export class GeminiContractItemProvider
   implements ContractItemPdfProvider
 {
@@ -252,8 +298,10 @@ export class GeminiContractItemProvider
     apiKey: string;
     model: string;
     data: Buffer;
+    includeContractDraft: boolean;
   }): Promise<ContractItemExtractionResult> {
-    const { apiKey, model, data } = params;
+    const { apiKey, model, data, includeContractDraft } = params;
+    const startedAt = Date.now();
     const endpoint =
       "https://generativelanguage.googleapis.com/" +
       "v1beta/models/" +
@@ -276,7 +324,12 @@ export class GeminiContractItemProvider
                 {
                   text: [
                     "Phân tích PDF hợp đồng đã được người dùng xác nhận là đã loại thông tin nhạy cảm.",
-                    "Chỉ trích xuất các hạng mục công việc hoặc dịch vụ có căn cứ trực tiếp trong tài liệu.",
+                    includeContractDraft
+                      ? "Trong đúng một kết quả, trả về contract draft và danh sách items từ cùng PDF này."
+                      : "Chỉ trả về danh sách items theo schema.",
+                    includeContractDraft
+                      ? "Contract draft chỉ gồm các trường trong schema đang có căn cứ trực tiếp; không có căn cứ phải trả null."
+                      : "Chỉ trích xuất các hạng mục công việc hoặc dịch vụ có căn cứ trực tiếp trong tài liệu.",
                     "Không suy đoán hoặc tự điền dữ liệu không có trong PDF.",
                     "Trường nào tài liệu không cung cấp thì trả về null.",
                     "Giữ nguyên số liệu và đơn vị trong tài liệu.",
@@ -284,7 +337,7 @@ export class GeminiContractItemProvider
                     "sourcePage là số trang của PDF, bắt đầu từ 1.",
                     "evidence là một dẫn chứng ngắn trực tiếp từ tài liệu.",
                     "confidence là số từ 0 đến 1 thể hiện độ tin cậy của việc trích xuất.",
-                    "Không trích xuất thông tin liên hệ, tài khoản, bí mật, dữ liệu cá nhân hoặc nội dung không liên quan đến hạng mục hợp đồng.",
+                    "Chỉ trích xuất các trường có trong JSON schema; không lấy tài khoản, bí mật hoặc dữ liệu ngoài phạm vi tạo hợp đồng.",
                   ].join("\n"),
                 },
                 {
@@ -298,9 +351,13 @@ export class GeminiContractItemProvider
           ],
           generationConfig: {
             temperature: 0,
+            maxOutputTokens: 16_384,
+            thinkingConfig: thinkingConfigForModel(model),
             responseMimeType: "application/json",
             responseJsonSchema:
-              geminiContractItemExtractionSchema,
+              includeContractDraft
+                ? geminiContractCreationExtractionSchema
+                : geminiContractItemExtractionSchema,
           },
         }),
       });
@@ -344,6 +401,7 @@ export class GeminiContractItemProvider
         errorCode: payload.error?.code,
         errorMessage: payload.error?.message,
         model,
+        elapsedMs: Date.now() - startedAt,
       });
 
       const code =
@@ -369,11 +427,13 @@ export class GeminiContractItemProvider
     const rawText = responseText(payload);
 
     let parsed: {
+      contract?: ExtractedContractDraft;
       items?: ExtractedContractItem[];
     };
 
     try {
       parsed = JSON.parse(rawText) as {
+        contract?: ExtractedContractDraft;
         items?: ExtractedContractItem[];
       };
     } catch {
@@ -383,10 +443,21 @@ export class GeminiContractItemProvider
     if (!Array.isArray(parsed.items)) {
       throw new Error("GEMINI_OUTPUT_INVALID");
     }
+    if (includeContractDraft && (!parsed.contract || typeof parsed.contract !== "object")) {
+      throw new Error("GEMINI_CONTRACT_OUTPUT_INVALID");
+    }
+
+    console.info("Gemini PDF extraction completed", {
+      model,
+      elapsedMs: Date.now() - startedAt,
+      itemCount: parsed.items.length,
+      contractDraftIncluded: Boolean(parsed.contract),
+    });
 
     return {
       providerId: this.id,
       model,
+      contract: parsed.contract,
       items: parsed.items,
     };
   }
@@ -394,6 +465,7 @@ export class GeminiContractItemProvider
   async extract(input: {
     data: Buffer;
     fileName: string;
+    includeContractDraft?: boolean;
   }): Promise<ContractItemExtractionResult> {
     const apiKey = await this.resolveApiKey();
 
@@ -408,6 +480,7 @@ export class GeminiContractItemProvider
           apiKey,
           model,
           data: input.data,
+          includeContractDraft: input.includeContractDraft === true,
         });
       } catch (error) {
         lastError = error;

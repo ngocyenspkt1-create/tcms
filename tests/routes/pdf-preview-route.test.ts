@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   parseContractItemImport,
   parseContractItemImportRequest,
+  toContractFormDraft,
   toImportDrafts,
   validatePdfSignature,
   validatePdfUpload,
@@ -29,6 +30,23 @@ test("AI extraction keeps missing values visible for user validation", () => {
   assert.equal(drafts[0].weightPercent, null);
   assert.deepEqual(drafts[0].checklistItems, []);
   assert.ok(drafts[0].issues.some((issue) => issue.includes("trọng số")));
+});
+
+test("contract extraction maps only grounded and valid form fields", () => {
+  const draft = toContractFormDraft({
+    contractNumber: " 203/HĐ-NĐDH.26 ", packageName: "Bảo dưỡng bơm", leadDepartment: "PXVH1",
+    contractorName: "Nhà thầu A", contractorAddress: null, contractorPhone: null,
+    contractorRepresentative: null, handoverDocument: "VB-01", handoverDate: "27/08/2026",
+    contractDurationDays: 90, serviceDurationText: "90 ngày", contractStartDate: "2026-09-01",
+    siteHandoverDate: null, goodsEndDate: null, serviceEndDate: null, contractEndDate: "2026-11-30",
+    isExtended: false, extendedUntil: null, implementationInvitationDate: null,
+  });
+  assert.equal(draft.contractNumber, "203/HĐ-NĐDH.26");
+  assert.equal(draft.contractDurationDays, 90);
+  assert.equal(draft.contractStartDate, "2026-09-01");
+  assert.equal(draft.handoverDate, undefined);
+  assert.equal(draft.contractorAddress, undefined);
+  assert.equal(draft.isExtended, false);
 });
 
 test("PDF import creates safe checklist drafts and validates weight allocation", () => {
@@ -122,6 +140,94 @@ test("OpenAI provider sends PDF with strict schema and disables response storage
   }
 });
 
+test("one OpenAI request returns both contract and item drafts", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (_input, init) => {
+    calls += 1;
+    const body = JSON.parse(String(init?.body)) as {
+      text: { format: { name: string; schema: { properties: Record<string, unknown> } } };
+    };
+    assert.equal(body.text.format.name, "tcms_contract_and_items");
+    assert.ok(body.text.format.schema.properties.contract);
+    assert.ok(body.text.format.schema.properties.items);
+    return Response.json({
+      status: "completed",
+      output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify({
+        contract: {
+          contractNumber: "203/HĐ", packageName: "Gói bảo dưỡng", leadDepartment: "PXVH1",
+          contractorName: "Nhà thầu A", contractorAddress: null, contractorPhone: null,
+          contractorRepresentative: null, handoverDocument: null, handoverDate: null,
+          contractDurationDays: 30, serviceDurationText: null, contractStartDate: null,
+          siteHandoverDate: null, goodsEndDate: null, serviceEndDate: null, contractEndDate: null,
+          isExtended: null, extendedUntil: null, implementationInvitationDate: null,
+        },
+        items: [{
+          itemCode: "HM-01", groupCode: null, groupName: null, serviceDescription: "Bảo dưỡng bơm",
+          workContent: "1. Kiểm tra\n2. Chạy thử", quantity: 1, unit: "bộ", serviceLocation: null,
+          completionDurationDays: 3, weightPercent: null, plannedStartDate: null, plannedEndDate: null,
+          sourcePage: 2, evidence: "Bảo dưỡng 01 bộ bơm", confidence: 0.95,
+        }],
+      }) }] }],
+    });
+  };
+
+  try {
+    const result = await new OpenAiContractItemProvider("test-key", "test-model").extract({
+      data: Buffer.from("%PDF-1.7\n"),
+      fileName: "synthetic-redacted.pdf",
+      includeContractDraft: true,
+    });
+    assert.equal(calls, 1);
+    assert.equal(result.contract?.contractNumber, "203/HĐ");
+    assert.equal(result.items[0].serviceDescription, "Bảo dưỡng bơm");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("one Gemini request returns both contract and item drafts", async () => {
+  const originalFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (_input, init) => {
+    calls += 1;
+    const body = JSON.parse(String(init?.body)) as {
+      generationConfig: { responseJsonSchema: { properties: Record<string, unknown> } };
+    };
+    assert.ok(body.generationConfig.responseJsonSchema.properties.contract);
+    assert.ok(body.generationConfig.responseJsonSchema.properties.items);
+    return Response.json({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+      contract: {
+        contractNumber: "204/HĐ", packageName: "Gói sửa chữa", leadDepartment: "PXSCCN",
+        contractorName: "Nhà thầu B", contractorAddress: null, contractorPhone: null,
+        contractorRepresentative: null, handoverDocument: null, handoverDate: null,
+        contractDurationDays: 45, serviceDurationText: null, contractStartDate: null,
+        siteHandoverDate: null, goodsEndDate: null, serviceEndDate: null, contractEndDate: null,
+        isExtended: null, extendedUntil: null, implementationInvitationDate: null,
+      },
+      items: [{
+        itemCode: "HM-02", groupCode: null, groupName: null, serviceDescription: "Sửa chữa van",
+        workContent: null, quantity: 2, unit: "cái", serviceLocation: null,
+        completionDurationDays: null, weightPercent: null, plannedStartDate: null, plannedEndDate: null,
+        sourcePage: 3, evidence: "Sửa chữa 02 van", confidence: 0.93,
+      }],
+    }) }] } }] });
+  };
+
+  try {
+    const result = await new GeminiContractItemProvider("test-key", "gemini-flash-latest").extract({
+      data: Buffer.from("%PDF-1.7\n"),
+      fileName: "synthetic-redacted.pdf",
+      includeContractDraft: true,
+    });
+    assert.equal(calls, 1);
+    assert.equal(result.contract?.contractNumber, "204/HĐ");
+    assert.equal(result.items[0].serviceDescription, "Sửa chữa van");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("scan heuristic falls back to OCR for metadata-only multi-page text", () => {
   assert.equal(hasUsefulPdfText("PDF metadata ".repeat(25), 25), false);
   assert.equal(hasUsefulPdfText("Nội dung hợp đồng và phạm vi công việc ".repeat(100), 25), true);
@@ -130,9 +236,12 @@ test("scan heuristic falls back to OCR for metadata-only multi-page text", () =>
 test("Gemini provider falls back to next model on 503 UNAVAILABLE transient error", async () => {
   const originalFetch = globalThis.fetch;
   const calls: string[] = [];
-  globalThis.fetch = async (input) => {
+  const configs: Array<{ thinkingConfig?: unknown; maxOutputTokens?: number }> = [];
+  globalThis.fetch = async (input, init) => {
     const url = String(input);
     calls.push(url);
+    const body = JSON.parse(String(init?.body)) as { generationConfig: { thinkingConfig?: unknown; maxOutputTokens?: number } };
+    configs.push(body.generationConfig);
     if (url.includes("gemini-flash-latest")) {
       return new Response(
         JSON.stringify({
@@ -200,6 +309,11 @@ test("Gemini provider falls back to next model on 503 UNAVAILABLE transient erro
     assert.equal(calls.length, 2);
     assert.match(calls[0], /gemini-flash-latest/);
     assert.match(calls[1], /gemini-3.6-flash/);
+    assert.deepEqual(configs.map((config) => config.thinkingConfig), [
+      { thinkingLevel: "low" },
+      { thinkingLevel: "minimal" },
+    ]);
+    assert.deepEqual(configs.map((config) => config.maxOutputTokens), [16_384, 16_384]);
   } finally {
     globalThis.fetch = originalFetch;
   }

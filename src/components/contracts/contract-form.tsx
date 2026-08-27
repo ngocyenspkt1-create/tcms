@@ -6,7 +6,9 @@ import { useState, type FormEvent, type ReactNode } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { ContractCreatePdfImport } from "@/components/contracts/contract-create-pdf-import";
 import { useContracts, type ContractInput } from "@/components/contracts/contract-store";
+import type { ContractFormImportDraft, PendingContractPdfImport } from "@/types/contract-create-import";
 import type { Contract, ContractStatus, Supervisor } from "@/types/contract";
 
 type ContractFormProps =
@@ -137,18 +139,26 @@ function ContractEditor({
   initialContract?: Contract;
 }) {
   const router = useRouter();
-  const { contracts, addContract, updateContract } = useContracts();
+  const { contracts, addContract, addContractWithItems, updateContract } = useContracts();
   const [draft, setDraft] = useState<ContractInput>(() =>
     initialContract ? toContractInput(initialContract) : createBlankContract()
   );
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
+  const [pendingPdfImport, setPendingPdfImport] = useState<PendingContractPdfImport | null>(null);
 
   function updateField<K extends keyof ContractInput>(
     field: K,
     value: ContractInput[K]
   ) {
     setDraft((currentDraft) => ({ ...currentDraft, [field]: value }));
+  }
+
+  function applyImportedContract(imported: ContractFormImportDraft) {
+    const groundedFields = Object.fromEntries(
+      Object.entries(imported).filter(([, value]) => value !== undefined),
+    ) as Partial<ContractInput>;
+    setDraft((currentDraft) => ({ ...currentDraft, ...groundedFields }));
   }
 
   function updateSupervisor(
@@ -188,6 +198,17 @@ function ContractEditor({
     }
     if (draft.isExtended && !draft.extendedUntil) {
       validationErrors.push("Hợp đồng đã gia hạn nhưng chưa nhập ngày gia hạn đến.");
+    }
+
+    if (pendingPdfImport) {
+      if (!pendingPdfImport.items.length) validationErrors.push("Bản nháp PDF chưa có hạng mục để tạo.");
+      if (pendingPdfImport.items.some((item) => !item.serviceDescription.trim())) {
+        validationErrors.push("Mỗi hạng mục PDF phải có tên/nội dung.");
+      }
+      const totalWeight = pendingPdfImport.items.reduce((sum, item) => sum + (item.weightPercent ?? 0), 0);
+      if (Math.abs(totalWeight - 100) > 0.005) {
+        validationErrors.push("Tổng trọng số các hạng mục PDF phải bằng 100.00%.");
+      }
     }
 
     const completeSupervisors = draft.supervisors.filter(
@@ -250,7 +271,9 @@ function ContractEditor({
     let savedContract: Contract | undefined;
     try {
       savedContract = mode === "create"
-        ? await addContract(input)
+        ? pendingPdfImport
+          ? await addContractWithItems(input, pendingPdfImport)
+          : await addContract(input)
         : await updateContract(initialContract!.id, input);
     } catch (saveError) {
       setErrors([saveError instanceof Error ? saveError.message : "Không thể lưu hợp đồng."]);
@@ -283,6 +306,13 @@ function ContractEditor({
         </div>
       )}
 
+      {mode === "create" && (
+        <ContractCreatePdfImport
+          onContractDraft={applyImportedContract}
+          onImportChange={setPendingPdfImport}
+        />
+      )}
+
       <FormSection
         title="1. Thông tin nhận diện"
         description="Các trường chính để nhận diện và phân công quản lý hợp đồng."
@@ -308,7 +338,7 @@ function ContractEditor({
               <option value="PXVH1" />
               <option value="PXSCCN" />
               <option value="PXSCĐTĐ" />
-              <option value="PKT" label="Phòng Kỹ thuật" />
+              <option value="P.KTAT" />
               <option value="PAT" label="Phòng An toàn" />
             </datalist>
           </Field>
@@ -633,7 +663,9 @@ function ContractEditor({
           {saving
             ? "Đang lưu..."
             : mode === "create"
-              ? "Lưu hợp đồng mới"
+              ? pendingPdfImport
+                ? "Xác nhận tạo hợp đồng và hạng mục"
+                : "Lưu hợp đồng mới"
               : "Lưu thay đổi"}
         </button>
       </div>

@@ -2,12 +2,38 @@ import { readFile } from "node:fs/promises";
 import type {
   ContractItemExtractionResult,
   ContractItemPdfProvider,
+  ExtractedContractDraft,
   ExtractedContractItem,
 } from "./contract-item-import";
 
 const nullableString = { type: ["string", "null"] };
 const nullableNumber = { type: ["number", "null"] };
 const nullableInteger = { type: ["integer", "null"] };
+const nullableBoolean = { type: ["boolean", "null"] };
+
+const extractedContractProperties = {
+  contractNumber: nullableString,
+  packageName: nullableString,
+  leadDepartment: nullableString,
+  contractorName: nullableString,
+  contractorAddress: nullableString,
+  contractorPhone: nullableString,
+  contractorRepresentative: nullableString,
+  handoverDocument: nullableString,
+  handoverDate: nullableString,
+  contractDurationDays: nullableInteger,
+  serviceDurationText: nullableString,
+  contractStartDate: nullableString,
+  siteHandoverDate: nullableString,
+  goodsEndDate: nullableString,
+  serviceEndDate: nullableString,
+  contractEndDate: nullableString,
+  isExtended: nullableBoolean,
+  extendedUntil: nullableString,
+  implementationInvitationDate: nullableString,
+} as const;
+
+const extractedContractRequired = Object.keys(extractedContractProperties);
 
 export const contractItemExtractionSchema = {
   type: "object",
@@ -45,6 +71,21 @@ export const contractItemExtractionSchema = {
     },
   },
   required: ["items"],
+} as const;
+
+export const contractCreationExtractionSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    contract: {
+      type: "object",
+      additionalProperties: false,
+      properties: extractedContractProperties,
+      required: extractedContractRequired,
+    },
+    items: contractItemExtractionSchema.properties.items,
+  },
+  required: ["contract", "items"],
 } as const;
 
 type OpenAiResponse = {
@@ -87,8 +128,13 @@ export class OpenAiContractItemProvider implements ContractItemPdfProvider {
     return value;
   }
 
-  async extract(input: { data: Buffer; fileName: string }): Promise<ContractItemExtractionResult> {
+  async extract(input: {
+    data: Buffer;
+    fileName: string;
+    includeContractDraft?: boolean;
+  }): Promise<ContractItemExtractionResult> {
     const apiKey = await this.resolveApiKey();
+    const includeContractDraft = input.includeContractDraft === true;
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -97,20 +143,34 @@ export class OpenAiContractItemProvider implements ContractItemPdfProvider {
         model: this.model,
         store: false,
         instructions: [
-          "Trích xuất các hạng mục công việc/dịch vụ có căn cứ trực tiếp trong PDF hợp đồng.",
+          includeContractDraft
+            ? "Trích xuất đồng thời thông tin hợp đồng và các hạng mục công việc/dịch vụ từ cùng một PDF."
+            : "Trích xuất các hạng mục công việc/dịch vụ có căn cứ trực tiếp trong PDF hợp đồng.",
           "Không suy đoán hoặc tự điền dữ liệu không có trong tài liệu; trường thiếu phải là null.",
           "Giữ nguyên đơn vị và số liệu. Ngày trả về dạng YYYY-MM-DD nếu tài liệu đủ rõ, nếu không để null.",
           "evidence là một đoạn dẫn chứng ngắn, sourcePage là số trang bắt đầu từ 1, confidence từ 0 đến 1.",
-          "Không trích xuất thông tin liên hệ, tài khoản, bí mật, dữ liệu cá nhân hoặc nội dung ngoài hạng mục.",
+          "Chỉ trích xuất các trường có trong JSON schema; không lấy tài khoản, bí mật hoặc dữ liệu ngoài phạm vi tạo hợp đồng.",
         ].join("\n"),
         input: [{
           role: "user",
           content: [
             { type: "input_file", filename: input.fileName, file_data: `data:application/pdf;base64,${input.data.toString("base64")}` },
-            { type: "input_text", text: "Phân tích PDF đã được người dùng xác nhận là đã loại thông tin nhạy cảm và trả về danh sách hạng mục hợp đồng." },
+            {
+              type: "input_text",
+              text: includeContractDraft
+                ? "Phân tích PDF đã được xác nhận là đã loại thông tin nhạy cảm và trả về một contract draft cùng danh sách items trong một kết quả."
+                : "Phân tích PDF đã được người dùng xác nhận là đã loại thông tin nhạy cảm và trả về danh sách hạng mục hợp đồng.",
+            },
           ],
         }],
-        text: { format: { type: "json_schema", name: "tcms_contract_items", strict: true, schema: contractItemExtractionSchema } },
+        text: {
+          format: {
+            type: "json_schema",
+            name: includeContractDraft ? "tcms_contract_and_items" : "tcms_contract_items",
+            strict: true,
+            schema: includeContractDraft ? contractCreationExtractionSchema : contractItemExtractionSchema,
+          },
+        },
       }),
     });
 
@@ -118,8 +178,19 @@ export class OpenAiContractItemProvider implements ContractItemPdfProvider {
     if (!response.ok) throw new Error(`OPENAI_API_ERROR_${response.status}`);
     if (payload.status && payload.status !== "completed") throw new Error("OPENAI_RESPONSE_INCOMPLETE");
 
-    const parsed = JSON.parse(responseText(payload)) as { items?: ExtractedContractItem[] };
+    const parsed = JSON.parse(responseText(payload)) as {
+      contract?: ExtractedContractDraft;
+      items?: ExtractedContractItem[];
+    };
     if (!Array.isArray(parsed.items)) throw new Error("AI_OUTPUT_INVALID");
-    return { providerId: this.id, model: this.model, items: parsed.items };
+    if (includeContractDraft && (!parsed.contract || typeof parsed.contract !== "object")) {
+      throw new Error("AI_CONTRACT_OUTPUT_INVALID");
+    }
+    return {
+      providerId: this.id,
+      model: this.model,
+      contract: parsed.contract,
+      items: parsed.items,
+    };
   }
 }

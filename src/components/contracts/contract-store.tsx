@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { Contract } from "@/types/contract";
+import type { PendingContractPdfImport } from "@/types/contract-create-import";
 
 export type ContractInput = Omit<Contract, "id" | "stt" | "version">;
 
@@ -11,6 +12,7 @@ type ContractStoreValue = {
   error: string | null;
   refresh: () => Promise<void>;
   addContract: (input: ContractInput) => Promise<Contract>;
+  addContractWithItems: (input: ContractInput, pdfImport: PendingContractPdfImport) => Promise<Contract>;
   updateContract: (id: string, input: ContractInput) => Promise<Contract | undefined>;
   getContract: (id: string) => Contract | undefined;
 };
@@ -60,6 +62,20 @@ export function ContractStoreProvider({ children }: { children: React.ReactNode 
     return result.contract;
   }, []);
 
+  const addContractWithItems = useCallback(async (input: ContractInput, pdfImport: PendingContractPdfImport) => {
+    const result = await api<{ contract: Contract }>("/api/contracts", {
+      method: "POST",
+      body: JSON.stringify({
+        contract: input,
+        items: pdfImport.items,
+        weightAllocationMethod: pdfImport.weightAllocationMethod,
+        redactionConfirmed: pdfImport.redactionConfirmed,
+      }),
+    });
+    setContracts((current) => [...current, result.contract]);
+    return result.contract;
+  }, []);
+
   const updateContract = useCallback(async (id: string, input: ContractInput) => {
     const current = contracts.find((contract) => contract.id === id);
     if (!current) return undefined;
@@ -72,7 +88,7 @@ export function ContractStoreProvider({ children }: { children: React.ReactNode 
   }, [contracts]);
 
   const getContract = useCallback((id: string) => contracts.find((contract) => contract.id === id), [contracts]);
-  const value = useMemo(() => ({ contracts, ready, error, refresh, addContract, updateContract, getContract }), [contracts, ready, error, refresh, addContract, updateContract, getContract]);
+  const value = useMemo(() => ({ contracts, ready, error, refresh, addContract, addContractWithItems, updateContract, getContract }), [contracts, ready, error, refresh, addContract, addContractWithItems, updateContract, getContract]);
   return <ContractStoreContext.Provider value={value}>{children}</ContractStoreContext.Provider>;
 }
 

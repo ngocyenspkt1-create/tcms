@@ -14,7 +14,7 @@ FROM (VALUES
  ('00000000-0000-0000-0000-000000000001','dev-admin','admin@tcms.dev','Quản trị DEV','PXVH1'),
  ('00000000-0000-0000-0000-000000000002','dev-manager','manager@tcms.dev','Quản lý hợp đồng DEV','PXVH1'),
  ('00000000-0000-0000-0000-000000000003','dev-supervisor','supervisor@tcms.dev','Giám sát DEV','PXVH1'),
- ('00000000-0000-0000-0000-000000000004','dev-viewer','viewer@tcms.dev','Người xem DEV','PKT')
+ ('00000000-0000-0000-0000-000000000004','dev-viewer','viewer@tcms.dev','Người xem DEV','P.KTAT')
 ) v(id,subject,username,display_name,department_code)
 JOIN tcms.departments d ON d.code=v.department_code
 ON CONFLICT (identity_subject) DO UPDATE SET display_name=EXCLUDED.display_name, active=true;
@@ -40,7 +40,7 @@ SELECT v.contract_number,v.package_name,d.id,n.id,n.name,v.duration,v.start_date
   v.progress,v.progress_note,'Chưa thanh toán',v.status,'dev-seed','dev-seed'
 FROM (VALUES
  ('DEV/2026/001','Bảo dưỡng thiết bị phụ tổ máy - dữ liệu giả','PXVH1','DEV-NT-001',90,'2026-08-01','2026-10-29',25,'Đang triển khai theo kế hoạch','IN_PROGRESS'),
- ('DEV/2026/002','Kiểm định kỹ thuật định kỳ - dữ liệu giả','PKT','DEV-NT-002',45,'2026-09-01','2026-10-15',0,'Chưa bắt đầu','ACTIVE')
+ ('DEV/2026/002','Kiểm định kỹ thuật định kỳ - dữ liệu giả','P.KTAT','DEV-NT-002',45,'2026-09-01','2026-10-15',0,'Chưa bắt đầu','ACTIVE')
 ) v(contract_number,package_name,department_code,contractor_code,duration,start_date,end_date,progress,progress_note,status)
 JOIN tcms.departments d ON d.code=v.department_code JOIN tcms.contractors n ON n.code=v.contractor_code
 ON CONFLICT (contract_number) DO NOTHING;

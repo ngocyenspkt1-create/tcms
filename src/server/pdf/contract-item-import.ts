@@ -29,15 +29,77 @@ export type ExtractedContractItem = {
   confidence: number | null;
 };
 
+export type ExtractedContractDraft = {
+  contractNumber: string | null;
+  packageName: string | null;
+  leadDepartment: string | null;
+  contractorName: string | null;
+  contractorAddress: string | null;
+  contractorPhone: string | null;
+  contractorRepresentative: string | null;
+  handoverDocument: string | null;
+  handoverDate: string | null;
+  contractDurationDays: number | null;
+  serviceDurationText: string | null;
+  contractStartDate: string | null;
+  siteHandoverDate: string | null;
+  goodsEndDate: string | null;
+  serviceEndDate: string | null;
+  contractEndDate: string | null;
+  isExtended: boolean | null;
+  extendedUntil: string | null;
+  implementationInvitationDate: string | null;
+};
+
 export type ContractItemExtractionResult = {
   providerId: string;
   model: string | null;
+  contract?: ExtractedContractDraft;
   items: ExtractedContractItem[];
 };
 
 export interface ContractItemPdfProvider {
   readonly id: string;
-  extract(input: { data: Buffer; fileName: string }): Promise<ContractItemExtractionResult>;
+  extract(input: {
+    data: Buffer;
+    fileName: string;
+    includeContractDraft?: boolean;
+  }): Promise<ContractItemExtractionResult>;
+}
+
+function nullableText(value: string | null) {
+  const normalized = value?.trim();
+  return normalized || undefined;
+}
+
+function nullableDate(value: string | null) {
+  const normalized = nullableText(value);
+  return normalized && /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : undefined;
+}
+
+export function toContractFormDraft(extracted: ExtractedContractDraft) {
+  const duration = extracted.contractDurationDays;
+  return {
+    contractNumber: nullableText(extracted.contractNumber),
+    packageName: nullableText(extracted.packageName),
+    leadDepartment: nullableText(extracted.leadDepartment),
+    contractorName: nullableText(extracted.contractorName),
+    contractorAddress: nullableText(extracted.contractorAddress),
+    contractorPhone: nullableText(extracted.contractorPhone),
+    contractorRepresentative: nullableText(extracted.contractorRepresentative),
+    handoverDocument: nullableText(extracted.handoverDocument),
+    handoverDate: nullableDate(extracted.handoverDate),
+    contractDurationDays: duration !== null && Number.isInteger(duration) && duration >= 0 ? duration : undefined,
+    serviceDurationText: nullableText(extracted.serviceDurationText),
+    contractStartDate: nullableDate(extracted.contractStartDate),
+    siteHandoverDate: nullableDate(extracted.siteHandoverDate),
+    goodsEndDate: nullableDate(extracted.goodsEndDate),
+    serviceEndDate: nullableDate(extracted.serviceEndDate),
+    contractEndDate: nullableDate(extracted.contractEndDate),
+    isExtended: extracted.isExtended ?? undefined,
+    extendedUntil: nullableDate(extracted.extendedUntil),
+    implementationInvitationDate: nullableDate(extracted.implementationInvitationDate),
+  };
 }
 
 export function validatePdfUpload(file: File) {
