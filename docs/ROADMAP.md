@@ -24,6 +24,7 @@ Lưu ý: “Completed” ở đây nghĩa là phần mã/tài liệu đã tồn 
 - [ ] Hoàn thiện Contract Item từ schema thành type → validation → repository → service → API → tab UI.
 - [ ] Đồng bộ master Contractor với Contract hiện tại bằng adapter/migration tương thích.
 - [ ] Chuẩn hóa validation server; hiện validation hợp đồng mới ở mức thủ công và chưa bao phủ đầy đủ ngày/status/nội dung.
+- [ ] PDF Import Phase 2A–2D: provider AI, Structured Outputs, preview/edit và confirm import đã có trong source; còn cần cấu hình API key, chạy thử với PDF giả/đã ẩn danh và kiểm chứng PostgreSQL/audit end-to-end.
 
 ## Next
 
@@ -88,3 +89,6 @@ Thực hiện Contract Item theo lát cắt nhỏ, luôn giữ UI hợp đồng 
 - **DECISION**: secret không hardcode/commit; production key thuộc KMS/Vault/HSM được phê duyệt.
 - **DECISION**: DEV/TEST chỉ dùng dữ liệu giả hoặc đã ẩn danh.
 - **DECISION**: không kết nối trực tiếp TCMS với OT/DCS/PLC trong phạm vi hiện tại.
+- **DECISION**: PDF Import chỉ gửi PDF đã loại thông tin nhạy cảm tới AI; OpenAI Responses API là provider đầu tiên nhưng đi qua abstraction để có thể thay thế.
+- **DECISION**: Structured Outputs chỉ tạo bản nháp; người dùng phải kiểm tra/sửa và xác nhận trước khi ghi DB. Trường không có căn cứ để trống, không cho AI tự suy đoán.
+- **DECISION**: OCR local là fallback có cấu hình, không phải luồng phân tích chính.

@@ -44,7 +44,7 @@ function mapRow(row: ContractRow): Contract {
     goodsEndDate: date(row.goods_end_date), serviceEndDate: date(row.service_end_date), contractEndDate: date(row.contract_end_date),
     isExtended: Boolean(row.is_extended), extendedUntil: date(row.extended_until),
     implementationInvitationDate: date(row.implementation_invitation_date),
-    progressPercent: row.progress_percent, progressNote: row.progress_note as string | undefined,
+    progressPercent: Number(row.progress_percent), progressNote: row.progress_note as string | undefined,
     ...commercial, paymentSettlementStatus: row.payment_settlement_status as string | undefined,
     status: row.status,
   };

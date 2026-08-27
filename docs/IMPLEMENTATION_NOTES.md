@@ -13,6 +13,7 @@
 - Next.js `16.3.2`, App Router; React `19.2.8`; TypeScript strict; Tailwind CSS 4.
 - Auth.js/NextAuth `5.0.0-beta.32` cho OIDC adapter.
 - `pg` cho PostgreSQL.
+- PDF import dùng `pdf-parse` + `tesseract.js` cho fallback local và Responses API cho luồng AI chính; provider nằm trong `src/server/pdf`.
 - Node.js scripts + PowerShell cho database local.
 - Không có ORM và chưa có Zod.
 
@@ -34,6 +35,7 @@ Trước khi dùng API/convention Next.js, đọc hướng dẫn tương ứng t
 | Migrations/seed | `database/migrations`, `database/seeds` |
 | DB utilities | `scripts/database` |
 | Tests | `tests/security` |
+| PDF Import | `src/server/pdf`, `src/app/api/contracts/[id]/items/import`, `src/types/contract-item-import.ts` |
 
 ## Data flow hiện tại
 
@@ -86,6 +88,16 @@ npm.cmd run db:backup
 ```
 
 Không chạy `db:setup`/restore khi chưa xác nhận `.env.local` và target `_dev`/`_test`.
+
+## PDF Import Phase 2A–2D
+
+- `TCMS_PDF_AI_PROVIDER=openai` chọn adapter hiện tại; UI/API không phụ thuộc trực tiếp provider.
+- `TCMS_PDF_AI_MODEL` chọn model có file input + Structured Outputs; mặc định source là `gpt-5.6`.
+- Khóa API chỉ ở server qua `OPENAI_API_KEY_FILE` (ưu tiên) hoặc `OPENAI_API_KEY`; không dùng biến `NEXT_PUBLIC_*` và không ghi khóa vào log.
+- Route preview yêu cầu quyền `contract.identity.update` và xác nhận PDF đã khử nhạy cảm.
+- AI chỉ tạo draft; confirm route validate lại và ghi toàn bộ trong một security transaction.
+- `TCMS_PDF_LOCAL_OCR_FALLBACK=true` bật fallback text/OCR local. Fallback không tự tạo Contract Item.
+- **NEEDS CONFIRMATION**: chạy thử với PDF giả/ẩn danh, API key được phê duyệt, PostgreSQL migration 001–004, RLS và audit thật.
 
 ## Safe change workflow
 

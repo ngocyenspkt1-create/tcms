@@ -4,6 +4,7 @@ import Link from "next/link";
 import { use } from "react";
 
 import { useContracts } from "@/components/contracts/contract-store";
+import { ContractItemsSection } from "@/components/contracts/contract-items-section";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import {
@@ -188,7 +189,7 @@ export default function ContractDetailPage({
   params,
 }: ContractDetailPageProps) {
   const { id } = use(params);
-  const { ready, getContract } = useContracts();
+  const { ready, getContract, refresh } = useContracts();
   const contract = getContract(id);
 
   if (!ready) {
@@ -334,6 +335,8 @@ export default function ContractDetailPage({
                     <InfoItem label="Thời gian hàng hóa / dịch vụ" value={contract.serviceDurationText} />
                   </dl>
                 </SectionCard>
+
+                <ContractItemsSection contractId={contract.id} onContractChanged={refresh} />
 
                 <SectionCard
                   title="Các mốc thời gian"

@@ -26,7 +26,7 @@ ContractItem ── N Milestone/Inspection/Issue/Acceptance/Document  [PLANNED]
 | Department | **IN PROGRESS** | Bảng/seed/RLS scope có; chưa có domain API/UI quản trị |
 | User / Personnel | **IN PROGRESS** | `app_users`, role scopes và identity resolver có; chưa có UI/API quản trị |
 | Contractor | **IN PROGRESS** | Bảng/seed có; Contract vẫn giữ `contractor_name` và encrypted contact adapter; chưa có CRUD riêng |
-| Contract Item | **IN PROGRESS** | Migration/seed có; chưa có TypeScript domain, repository, API hoặc UI |
+| Contract Item | **IN PROGRESS** | Type, validation, repository, API, UI và PDF import source đã có; chưa kiểm chứng PostgreSQL/audit end-to-end |
 | Document | **IN PROGRESS** | Bảng metadata/RLS/malware status có; chưa có API/storage/upload UI |
 | Audit Log | **IN PROGRESS** | Bảng append-only, trigger và audit helper có; chưa có UI, log tập trung hay kiểm thử DB thật |
 | Milestone | **PLANNED** | Chưa có bảng/type/API/UI |
@@ -59,7 +59,9 @@ Migration 003 tạo master entity `contractors` và thêm `contracts.contractor_
 
 Schema hiện có `contract_id`, STT/code/name/type, mô tả, đơn vị, khối lượng, trọng số, ngày kế hoạch/thực tế, tiến độ, ghi chú, nghiệm thu, status, version và archive metadata. Status: `NOT_STARTED`, `IN_PROGRESS`, `ON_HOLD`, `COMPLETED`, `ACCEPTED`, `CANCELLED`.
 
-Ràng buộc đã có cho phần trăm, khối lượng không âm, ngày kết thúc và optimistic locking. Chưa có API/UI/service nên chưa coi là chức năng hoàn thành.
+Ràng buộc đã có cho phần trăm, khối lượng không âm, ngày kết thúc và optimistic locking. TypeScript domain, service, repository, API và tab UI đã có trong worktree nhưng database runtime chưa được xác nhận, nên vẫn là **IN PROGRESS**.
+
+PDF Import Phase 2A–2D trong source dùng provider abstraction. Provider OpenAI gửi PDF đã được người dùng xác nhận khử nhạy cảm vào Responses API với JSON Schema nghiêm ngặt, tạo `ContractItemImportDraft`, hiển thị evidence/page/confidence để sửa, rồi validate lại và nhập nhiều hạng mục trong một transaction. OCR local chỉ trả text fallback khi AI không khả dụng; fallback không tự tạo hạng mục.
 
 ## Document — IN PROGRESS
 

@@ -16,14 +16,19 @@
     "db:setup": "node scripts/database/setup.mjs",
     "db:backup": "node --env-file-if-exists=.env.local scripts/database/run-powershell.mjs backup",
     "db:restore": "node --env-file-if-exists=.env.local scripts/database/run-powershell.mjs restore",
-    "test:security": "node --test tests/security/*.test.ts"
+    "test:security": "node --test tests/security/*.test.ts",
+    "test:routes": "node --test tests/routes/*.test.ts"
   },
   "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/vie": "^1.0.0",
     "next": "16.3.2",
     "next-auth": "^5.0.0-beta.32",
+    "pdf-parse": "^2.4.5",
     "pg": "^8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

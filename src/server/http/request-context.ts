@@ -1,19 +1,23 @@
 import "server-only";
 
-import { auth } from "@/auth";
 import { resolvePrincipal } from "../auth/identity";
 
 export class AuthenticationError extends Error {}
 
 export async function getRequestContext(request: Request) {
-  const session = await auth();
-  let subject = session?.identitySubject;
-  let mfaVerified = session?.mfaVerified === true;
-
   const devAuthEnabled = process.env.DEV_AUTH_ENABLED === "true" || process.env.TCMS_DEV_AUTH_ENABLED === "true";
-  if (!subject && process.env.NODE_ENV !== "production" && devAuthEnabled) {
+  const useDevAuth = process.env.NODE_ENV !== "production" && devAuthEnabled;
+
+  let subject: string | undefined;
+  let mfaVerified = false;
+  if (useDevAuth) {
     subject = process.env.DEV_AUTH_SUBJECT?.trim() || process.env.TCMS_DEV_AUTH_SUBJECT?.trim();
     mfaVerified = process.env.DEV_AUTH_MFA === "true" || process.env.TCMS_DEV_AUTH_MFA === "true";
+  } else {
+    const { auth } = await import("@/auth");
+    const session = await auth();
+    subject = session?.identitySubject;
+    mfaVerified = session?.mfaVerified === true;
   }
   if (!subject) throw new AuthenticationError("AUTHENTICATION_REQUIRED");
 
