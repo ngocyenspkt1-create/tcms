@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 
+import { VietnameseDateInput } from "@/components/contracts/vietnamese-date-input";
 import type {
+  ContractEvidenceField,
   ContractCreatePdfPreviewResponse,
   ContractFormImportDraft,
   PendingContractPdfImport,
@@ -11,6 +13,23 @@ import type { ContractItemImportDraft, ContractItemWeightAllocationMethod } from
 
 const inputClass = "mt-1 h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-[11px] text-slate-800 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
 const textareaClass = "mt-1 min-h-20 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-800 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100";
+
+const contractEvidenceLabels: Record<ContractEvidenceField, string> = {
+  contractNumber: "Số hợp đồng",
+  signedDate: "Ngày ký",
+  packageName: "Tên gói thầu",
+  contractorName: "Nhà thầu",
+  contractorAddress: "Địa chỉ nhà thầu",
+  contractorPhone: "Điện thoại nhà thầu",
+  contractorRepresentative: "Đại diện nhà thầu",
+  contractDurationDays: "Tổng thời gian hợp đồng",
+  serviceProvisionDurationDays: "Thời gian cung cấp dịch vụ",
+  serviceDurationText: "Điều khoản thời gian dịch vụ",
+  unitExecutionDurationDays: "Thời gian thực hiện theo đơn vị/phạm vi",
+  unitExecutionContinuous: "Yêu cầu thực hiện liên tục",
+  unitExecutionTriggerText: "Mốc bắt đầu thời gian thực hiện",
+  effectiveConditionText: "Điều kiện có hiệu lực",
+};
 
 function equalWeights(count: number) {
   if (count <= 0) return [];
@@ -144,14 +163,31 @@ export function ContractCreatePdfImport({
           <div className="space-y-3 border-t border-slate-200 pt-3">
             <p className="text-[11px] font-semibold text-emerald-700">{preview.message}</p>
             <p className="text-[10px] text-slate-500">Nguồn: {preview.provider.id}{preview.provider.model ? ` / ${preview.provider.model}` : ""}. Hãy đối chiếu mọi nội dung với PDF trước khi lưu.</p>
+            {(preview.contractEvidence ?? []).length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-[10px] font-bold text-emerald-800">Căn cứ AI dùng để điền thông tin hợp đồng</p>
+                <div className="mt-2 space-y-2">
+                  {(preview.contractEvidence ?? []).map((entry, index) => (
+                    <div key={`${entry.field}-${entry.sourcePage ?? "unknown"}-${index}`} className="rounded border border-emerald-100 bg-white px-3 py-2 text-[9px] text-slate-600">
+                      <p className="font-bold text-slate-700">
+                        {contractEvidenceLabels[entry.field]} · Trang {entry.sourcePage ?? "?"}
+                        {entry.confidence !== null ? ` · Tin cậy ${Math.round(entry.confidence * 100)}%` : ""}
+                      </p>
+                      <p className="mt-1">{entry.evidence}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {preview.drafts.length > 0 && (
               <>
                 <div className="rounded-lg border border-blue-100 bg-blue-50 p-3 text-[10px]">
                   <div className="flex flex-wrap gap-4">
-                    <label className="flex items-center gap-2"><input type="radio" name="createWeightMethod" checked={weightAllocationMethod === "EQUAL"} onChange={() => chooseWeightMethod("EQUAL")} /> Chia đều 100%</label>
+                    <label className="flex items-center gap-2"><input type="radio" name="createWeightMethod" checked={weightAllocationMethod === "EQUAL"} onChange={() => chooseWeightMethod("EQUAL")} /> Chia đều tạm thời 100% (cần xác nhận)</label>
                     <label className="flex items-center gap-2"><input type="radio" name="createWeightMethod" checked={weightAllocationMethod === "MANUAL"} onChange={() => chooseWeightMethod("MANUAL")} /> Nhập trọng số thủ công</label>
                   </div>
                   <p className={`mt-2 font-bold ${Math.abs(totalWeight - 100) <= 0.005 ? "text-emerald-700" : "text-red-700"}`}>Tổng trọng số: {totalWeight.toFixed(2)}% / 100.00%</p>
+                  {weightAllocationMethod === "EQUAL" && <p className="mt-1 text-amber-700">Chia đều không chứng minh các hạng mục có cùng giá trị. Hãy chuyển sang nhập thủ công nếu có bảng giá chi tiết.</p>}
                 </div>
                 {preview.drafts.map((draft, index) => (
                   <div key={draft.draftId} className="space-y-3 rounded-xl border border-slate-200 p-3">
@@ -164,8 +200,20 @@ export function ContractCreatePdfImport({
                       <label className="text-[10px] font-semibold text-slate-700">Khối lượng<input type="number" min="0" className={inputClass} value={draft.quantity ?? ""} onChange={(event) => updateDraft(index, { quantity: event.target.value === "" ? null : Number(event.target.value) })} /></label>
                       <label className="text-[10px] font-semibold text-slate-700">Đơn vị<input className={inputClass} value={draft.unit} onChange={(event) => updateDraft(index, { unit: event.target.value })} /></label>
                       <label className="text-[10px] font-semibold text-slate-700">Trọng số (%) *<input type="number" min="0" max="100" step="0.01" disabled={weightAllocationMethod === "EQUAL"} className={inputClass} value={draft.weightPercent ?? ""} onChange={(event) => updateDraft(index, { weightPercent: event.target.value === "" ? null : Number(event.target.value) })} /></label>
-                      <label className="text-[10px] font-semibold text-slate-700">Ngày bắt đầu<input type="date" className={inputClass} value={draft.plannedStartDate} onChange={(event) => updateDraft(index, { plannedStartDate: event.target.value })} /></label>
-                      <label className="text-[10px] font-semibold text-slate-700">Ngày kết thúc<input type="date" className={inputClass} value={draft.plannedEndDate} onChange={(event) => updateDraft(index, { plannedEndDate: event.target.value })} /></label>
+                      <label className="text-[10px] font-semibold text-slate-700">
+                        Ngày bắt đầu
+                        <VietnameseDateInput
+                          value={draft.plannedStartDate}
+                          onChange={(val) => updateDraft(index, { plannedStartDate: val ?? "" })}
+                        />
+                      </label>
+                      <label className="text-[10px] font-semibold text-slate-700">
+                        Ngày kết thúc
+                        <VietnameseDateInput
+                          value={draft.plannedEndDate}
+                          onChange={(val) => updateDraft(index, { plannedEndDate: val ?? "" })}
+                        />
+                      </label>
                       <label className="text-[10px] font-semibold text-slate-700 sm:col-span-2 lg:col-span-4">Nội dung công việc<textarea className={textareaClass} value={draft.workContent} onChange={(event) => updateDraft(index, { workContent: event.target.value })} /></label>
                     </div>
                     <div>

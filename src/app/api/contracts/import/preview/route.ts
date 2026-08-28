@@ -3,6 +3,7 @@ import { apiError } from "@/server/http/api-response";
 import { getRequestContext } from "@/server/http/request-context";
 import {
   toContractFormDraft,
+  toContractFieldEvidence,
   toImportDrafts,
   validatePdfSignature,
   validatePdfUpload,
@@ -70,6 +71,7 @@ export async function POST(request: Request) {
         provider: { id: extraction.providerId, model: extraction.model },
         extraction: { source: "ai", pageCount: null, textLength: null, textPreview: "" },
         contractDraft: toContractFormDraft(extraction.contract),
+        contractEvidence: toContractFieldEvidence(extraction.contract),
         drafts,
         message: drafts.length
           ? `AI đã nhận diện thông tin hợp đồng và ${drafts.length} hạng mục. Hãy kiểm tra, sửa trước khi xác nhận tạo.`
@@ -101,6 +103,7 @@ export async function POST(request: Request) {
             : fallback.text,
         },
         contractDraft: {},
+        contractEvidence: [],
         drafts: [],
         message: "AI không khả dụng. Hệ thống chỉ đọc nội dung cục bộ để tham khảo và chưa tạo bản nháp.",
       }, { headers: { "cache-control": "no-store" } });

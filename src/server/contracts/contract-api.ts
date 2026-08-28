@@ -8,6 +8,9 @@ export function parseContractInput(value: unknown): ContractInput {
   const input = value as Partial<ContractInput>;
   if (!input.contractNumber?.trim() || !input.packageName?.trim() || !input.leadDepartment?.trim() || !input.contractorName?.trim()) throw new SyntaxError("MISSING_REQUIRED_FIELDS");
   if (!Array.isArray(input.supervisors) || typeof input.progressPercent !== "number" || input.progressPercent < 0 || input.progressPercent > 100) throw new SyntaxError("INVALID_CONTRACT_FIELDS");
+  if (input.contractDurationDays !== undefined && (!Number.isInteger(input.contractDurationDays) || input.contractDurationDays < 0)) throw new SyntaxError("INVALID_CONTRACT_FIELDS");
+  if (input.serviceProvisionDurationDays !== undefined && (!Number.isInteger(input.serviceProvisionDurationDays) || input.serviceProvisionDurationDays < 0)) throw new SyntaxError("INVALID_CONTRACT_FIELDS");
+  if (input.unitExecutionDurationDays !== undefined && (!Number.isInteger(input.unitExecutionDurationDays) || input.unitExecutionDurationDays <= 0)) throw new SyntaxError("INVALID_CONTRACT_FIELDS");
   return input as ContractInput;
 }
 

@@ -25,6 +25,7 @@ Lưu ý: “Completed” ở đây nghĩa là phần mã/tài liệu đã tồn 
 - [ ] Đồng bộ master Contractor với Contract hiện tại bằng adapter/migration tương thích.
 - [ ] Chuẩn hóa validation server; hiện validation hợp đồng mới ở mức thủ công và chưa bao phủ đầy đủ ngày/status/nội dung.
 - [ ] PDF Import Phase 2A–2D: provider AI, Structured Outputs, preview/edit và confirm import đã có trong source; còn cần cấu hình API key, chạy thử với PDF giả/đã ẩn danh và kiểm chứng PostgreSQL/audit end-to-end.
+- [ ] PDF Contract mapping P0: source đã tách ngày ký, 210/150/20 ngày, điều kiện hiệu lực và evidence theo field; migration 006 đã viết. Còn cần chạy migration trên PostgreSQL DEV và kiểm chứng lại bằng PDF 117 đã ẩn danh trước khi coi là end-to-end.
 
 ## Next
 

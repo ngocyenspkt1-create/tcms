@@ -295,7 +295,7 @@ export default function ContractDetailPage({
                 label="Ngày kết thúc hiệu lực"
                 value={
                   effectiveEndDate
-                    ? new Intl.DateTimeFormat("vi-VN").format(effectiveEndDate)
+                    ? formatDate(effectiveEndDate)
                     : "Chưa xác định"
                 }
                 note={contract.isExtended ? "Đã áp dụng thời hạn gia hạn" : "Theo hợp đồng"}
@@ -324,15 +324,28 @@ export default function ContractDetailPage({
                     <InfoItem label="Tên gói thầu" value={contract.packageName} wide />
                     <InfoItem label="Văn bản giao hợp đồng" value={contract.handoverDocument} />
                     <InfoItem label="Ngày giao hợp đồng" value={formatDate(contract.handoverDate)} />
+                    <InfoItem label="Ngày ký hợp đồng" value={formatDate(contract.signedDate)} />
                     <InfoItem
-                      label="Thời gian thực hiện"
+                      label="Tổng thời gian hợp đồng"
                       value={
                         contract.contractDurationDays
                           ? `${contract.contractDurationDays} ngày`
                           : undefined
                       }
                     />
-                    <InfoItem label="Thời gian hàng hóa / dịch vụ" value={contract.serviceDurationText} />
+                    <InfoItem
+                      label="Thời gian cung cấp dịch vụ"
+                      value={contract.serviceProvisionDurationDays !== undefined ? `${contract.serviceProvisionDurationDays} ngày` : undefined}
+                    />
+                    <InfoItem
+                      label="Thời gian thực hiện theo đơn vị / phạm vi"
+                      value={contract.unitExecutionDurationDays !== undefined
+                        ? `${contract.unitExecutionDurationDays} ngày${contract.unitExecutionContinuous ? " liên tục" : ""}`
+                        : undefined}
+                    />
+                    <InfoItem label="Mốc bắt đầu thời gian thực hiện" value={contract.unitExecutionTriggerText} />
+                    <InfoItem label="Điều khoản thời gian dịch vụ" value={contract.serviceDurationText} wide />
+                    <InfoItem label="Điều kiện có hiệu lực" value={contract.effectiveConditionText} wide />
                   </dl>
                 </SectionCard>
 
@@ -343,8 +356,9 @@ export default function ContractDetailPage({
                   description="Theo dõi các mốc triển khai, bàn giao và kết thúc."
                 >
                   <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                    <TimelineItem label="Ngày ký hợp đồng" value={contract.signedDate} />
                     <TimelineItem label="Mời triển khai" value={contract.implementationInvitationDate} />
-                    <TimelineItem label="Bắt đầu hợp đồng" value={contract.contractStartDate} />
+                    <TimelineItem label="Hiệu lực / bắt đầu thực tế" value={contract.contractStartDate} />
                     <TimelineItem label="Bàn giao mặt bằng" value={contract.siteHandoverDate} />
                     <TimelineItem label="Kết thúc giao hàng" value={contract.goodsEndDate} />
                     <TimelineItem label="Kết thúc dịch vụ" value={contract.serviceEndDate} />

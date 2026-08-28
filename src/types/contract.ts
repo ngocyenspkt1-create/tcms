@@ -61,8 +61,14 @@ export interface Contract {
   // =========================================================
   // 6. THỜI GIAN HỢP ĐỒNG
   // =========================================================
+  signedDate?: string;
   contractDurationDays?: number;
+  serviceProvisionDurationDays?: number;
   serviceDurationText?: string;
+  unitExecutionDurationDays?: number;
+  unitExecutionContinuous?: boolean;
+  unitExecutionTriggerText?: string;
+  effectiveConditionText?: string;
 
   contractStartDate?: string;
   siteHandoverDate?: string;

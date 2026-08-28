@@ -1,7 +1,7 @@
-import {
+import type {
   Contract,
   ContractWarning,
-} from "@/types/contract";
+} from "../types/contract";
 
 export function getEffectiveEndDate(
   contract: Contract
@@ -94,18 +94,4 @@ export function formatRemainingDays(
   return `${days} ngày`;
 }
 
-export function formatDate(
-  value?: string
-): string {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(
-    `${value}T00:00:00`
-  );
-
-  return new Intl.DateTimeFormat(
-    "vi-VN"
-  ).format(date);
-}
+export { formatDate } from "./date-utils";

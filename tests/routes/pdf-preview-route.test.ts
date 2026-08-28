@@ -4,14 +4,47 @@ import test from "node:test";
 import {
   parseContractItemImport,
   parseContractItemImportRequest,
+  toContractFieldEvidence,
   toContractFormDraft,
   toImportDrafts,
   validatePdfSignature,
   validatePdfUpload,
 } from "../../src/server/pdf/contract-item-import.ts";
+import { formatDate, displayToIsoDate, isoToDisplayDate } from "../../src/lib/date-utils.ts";
 import { hasUsefulPdfText } from "../../src/server/pdf/pdf-preview.ts";
 import { GeminiContractItemProvider } from "../../src/server/pdf/gemini-contract-item-provider.ts";
 import { OpenAiContractItemProvider } from "../../src/server/pdf/openai-contract-item-provider.ts";
+
+test("date formatting and conversions enforce deterministic DD/MM/YYYY with calendar validation", () => {
+  // ISO -> Display DD/MM/YYYY
+  assert.equal(isoToDisplayDate("2026-05-07"), "07/05/2026");
+  assert.equal(isoToDisplayDate("2026-08-01"), "01/08/2026");
+  assert.equal(isoToDisplayDate("2026-12-31"), "31/12/2026");
+  assert.equal(isoToDisplayDate(""), "");
+  assert.equal(isoToDisplayDate(null), "");
+  assert.equal(isoToDisplayDate(undefined), "");
+
+  // Display DD/MM/YYYY -> ISO YYYY-MM-DD
+  assert.equal(displayToIsoDate("07/05/2026"), "2026-05-07");
+  assert.equal(displayToIsoDate("31/12/2026"), "2026-12-31");
+  assert.equal(displayToIsoDate("29/02/2028"), "2028-02-29"); // Valid leap year
+  assert.equal(displayToIsoDate("29/02/2027"), null); // Invalid, not a leap year
+  assert.equal(displayToIsoDate("31/04/2026"), null); // Invalid, April has 30 days
+  assert.equal(displayToIsoDate("00/01/2026"), null); // Invalid day
+  assert.equal(displayToIsoDate("15/13/2026"), null); // Invalid month
+  assert.equal(displayToIsoDate(""), "");
+  assert.equal(displayToIsoDate(null), "");
+  assert.equal(displayToIsoDate(undefined), "");
+
+  // formatDate for UI text display
+  assert.equal(formatDate("2026-05-07"), "07/05/2026");
+  assert.equal(formatDate("2026-08-01"), "01/08/2026");
+  assert.equal(formatDate("2026-12-31"), "31/12/2026");
+  assert.equal(formatDate(new Date("2026-05-07T00:00:00")), "07/05/2026");
+  assert.equal(formatDate(null), "-");
+  assert.equal(formatDate(undefined), "-");
+  assert.equal(formatDate(""), "-");
+});
 
 test("PDF upload validation rejects non-PDF and invalid content", () => {
   assert.throws(() => validatePdfUpload(new File(["plain text"], "contract.txt", { type: "text/plain" })), SyntaxError);
@@ -34,19 +67,234 @@ test("AI extraction keeps missing values visible for user validation", () => {
 
 test("contract extraction maps only grounded and valid form fields", () => {
   const draft = toContractFormDraft({
-    contractNumber: " 203/HĐ-NĐDH.26 ", packageName: "Bảo dưỡng bơm", leadDepartment: "PXVH1",
+    contractNumber: " 203/HĐ-NĐDH.26 ", signedDate: "2026-08-27", packageName: "Bảo dưỡng bơm",
     contractorName: "Nhà thầu A", contractorAddress: null, contractorPhone: null,
-    contractorRepresentative: null, handoverDocument: "VB-01", handoverDate: "27/08/2026",
-    contractDurationDays: 90, serviceDurationText: "90 ngày", contractStartDate: "2026-09-01",
-    siteHandoverDate: null, goodsEndDate: null, serviceEndDate: null, contractEndDate: "2026-11-30",
-    isExtended: false, extendedUntil: null, implementationInvitationDate: null,
+    contractorRepresentative: null, contractDurationDays: 90, serviceProvisionDurationDays: 90,
+    serviceDurationText: "90 ngày", unitExecutionDurationDays: null, unitExecutionContinuous: null,
+    unitExecutionTriggerText: null, effectiveConditionText: null, fieldEvidence: [
+      { field: "contractNumber", sourcePage: 1, evidence: "Số 203/HĐ-NĐDH.26", confidence: 0.99 },
+      { field: "signedDate", sourcePage: 1, evidence: "ngày 27 tháng 08 năm 2026", confidence: 0.99 },
+      { field: "packageName", sourcePage: 1, evidence: "Bảo dưỡng bơm", confidence: 0.95 },
+      { field: "contractorName", sourcePage: 2, evidence: "Nhà thầu A", confidence: 0.95 },
+      { field: "contractDurationDays", sourcePage: 3, evidence: "90 ngày", confidence: 0.95 },
+      { field: "serviceProvisionDurationDays", sourcePage: 3, evidence: "90 ngày", confidence: 0.95 },
+      { field: "serviceDurationText", sourcePage: 3, evidence: "90 ngày", confidence: 0.95 },
+    ],
   });
   assert.equal(draft.contractNumber, "203/HĐ-NĐDH.26");
+  assert.equal(draft.signedDate, "2026-08-27");
+  assert.equal(formatDate(draft.signedDate), "27/08/2026");
   assert.equal(draft.contractDurationDays, 90);
-  assert.equal(draft.contractStartDate, "2026-09-01");
-  assert.equal(draft.handoverDate, undefined);
+  assert.equal(draft.serviceProvisionDurationDays, 90);
   assert.equal(draft.contractorAddress, undefined);
-  assert.equal(draft.isExtended, false);
+});
+
+test("contract 117 regression keeps 210, 150 and 20-day per-unit terms separate with 8 items and DD/MM/YYYY date", () => {
+  const extracted = {
+    contractNumber: "117/HĐ-NĐDH-IDC.26",
+    signedDate: "2026-05-07",
+    packageName: "Gói 08PTV-SXKD-2026",
+    contractorName: "Công ty Cổ phần Đầu tư Phát triển Công nghiệp Sài Gòn IDC",
+    contractorAddress: "685T, đường Lạc Long Quân, phường Tây Hồ, Thành phố Hà Nội",
+    contractorPhone: "0243.7586.529",
+    contractorRepresentative: "Dương Minh Danh",
+    contractDurationDays: 210,
+    serviceProvisionDurationDays: 150,
+    serviceDurationText: "Thời gian cung cấp dịch vụ là 150 ngày (trong đó thời gian thực hiện dịch vụ là 20 ngày/tổ máy, 20 ngày liên tục kể từ ngày nhận bàn giao mặt bằng)...",
+    unitExecutionDurationDays: 20,
+    unitExecutionContinuous: true,
+    unitExecutionTriggerText: "kể từ ngày nhận bàn giao mặt bằng",
+    effectiveConditionText: "hợp đồng có hiệu lực từ ngày hai bên ký hợp đồng và bên B nộp bảo đảm thực hiện hợp đồng",
+    fieldEvidence: [
+      { field: "contractNumber", sourcePage: 1, evidence: "Số 117/HĐ-NĐDH-IDC.26", confidence: 0.99 },
+      { field: "signedDate", sourcePage: 1, evidence: "ngày 07 tháng 05 năm 2026", confidence: 0.99 },
+      { field: "packageName", sourcePage: 1, evidence: "Gói 08PTV-SXKD-2026", confidence: 0.99 },
+      { field: "contractorName", sourcePage: 2, evidence: "Công ty Cổ phần Đầu tư Phát triển Công nghiệp Sài Gòn IDC", confidence: 0.99 },
+      { field: "contractorAddress", sourcePage: 2, evidence: "685T, đường Lạc Long Quân", confidence: 0.98 },
+      { field: "contractorPhone", sourcePage: 2, evidence: "0243.7586.529", confidence: 0.99 },
+      { field: "contractorRepresentative", sourcePage: 2, evidence: "Dương Minh Danh", confidence: 0.99 },
+      { field: "contractDurationDays", sourcePage: 3, evidence: "210 ngày", confidence: 0.99 },
+      { field: "serviceProvisionDurationDays", sourcePage: 3, evidence: "Thời gian cung cấp dịch vụ là 150 ngày", confidence: 0.99 },
+      { field: "serviceDurationText", sourcePage: 3, evidence: "Thời gian cung cấp dịch vụ là 150 ngày (trong đó thời gian thực hiện dịch vụ là 20 ngày/tổ máy...", confidence: 0.99 },
+      { field: "unitExecutionDurationDays", sourcePage: 3, evidence: "20 ngày/tổ máy", confidence: 0.99 },
+      { field: "unitExecutionContinuous", sourcePage: 3, evidence: "20 ngày liên tục", confidence: 0.99 },
+      { field: "unitExecutionTriggerText", sourcePage: 3, evidence: "kể từ ngày nhận bàn giao mặt bằng", confidence: 0.99 },
+      { field: "effectiveConditionText", sourcePage: 3, evidence: "hợp đồng có hiệu lực từ ngày hai bên ký hợp đồng và bên B nộp bảo đảm thực hiện hợp đồng", confidence: 0.98 },
+    ],
+  };
+  const draft = toContractFormDraft(extracted);
+  assert.equal(draft.signedDate, "2026-05-07");
+  assert.equal(formatDate(draft.signedDate), "07/05/2026");
+  assert.notEqual(formatDate(draft.signedDate), "05/07/2026");
+  assert.equal(draft.contractDurationDays, 210);
+  assert.equal(draft.serviceProvisionDurationDays, 150);
+  assert.equal(draft.unitExecutionDurationDays, 20);
+  assert.equal(draft.unitExecutionContinuous, true);
+  assert.equal(draft.unitExecutionTriggerText, "kể từ ngày nhận bàn giao mặt bằng");
+  assert.equal(draft.effectiveConditionText, "hợp đồng có hiệu lực từ ngày hai bên ký hợp đồng và bên B nộp bảo đảm thực hiện hợp đồng");
+  assert.equal(
+    toContractFieldEvidence(extracted).find((entry) => entry.field === "unitExecutionDurationDays")?.sourcePage,
+    3,
+  );
+  assert.equal("contractStartDate" in draft, false);
+  assert.equal("leadDepartment" in draft, false);
+
+  const sampleItems = Array.from({ length: 8 }, (_, i) => ({
+    itemCode: `HM-0${i + 1}`,
+    groupCode: null,
+    groupName: `Phần ${i + 1}`,
+    serviceDescription: `Hạng mục công việc số ${i + 1}`,
+    workContent: `1. Bước chuẩn bị ${i + 1}\n2. Bước thực hiện ${i + 1}`,
+    quantity: 1,
+    unit: "hệ thống",
+    serviceLocation: "Nhà máy",
+    completionDurationDays: 20,
+    weightPercent: 12.5,
+    plannedStartDate: null,
+    plannedEndDate: null,
+    sourcePage: 4 + Math.floor(i / 2),
+    evidence: `Hạng mục số ${i + 1}`,
+    confidence: 0.95,
+  }));
+  const itemDrafts = toImportDrafts(sampleItems);
+  assert.equal(itemDrafts.length, 8);
+  assert.equal(itemDrafts[0].checklistItems.length, 2);
+});
+
+test("CASE A: single contract duration from site handover leaves sub-durations optional/null", () => {
+  const extracted = {
+    contractNumber: "60/HĐ-DH",
+    signedDate: "2026-06-01",
+    packageName: "Gói thi công",
+    contractorName: "Nhà thầu A",
+    contractorAddress: null,
+    contractorPhone: null,
+    contractorRepresentative: null,
+    contractDurationDays: 60,
+    serviceProvisionDurationDays: null,
+    serviceDurationText: "Thời gian thực hiện hợp đồng là 60 ngày kể từ ngày ký biên bản bàn giao mặt bằng.",
+    unitExecutionDurationDays: null,
+    unitExecutionContinuous: null,
+    unitExecutionTriggerText: "kể từ ngày ký biên bản bàn giao mặt bằng",
+    effectiveConditionText: null,
+    fieldEvidence: [
+      { field: "contractNumber", sourcePage: 1, evidence: "60/HĐ-DH", confidence: 0.95 },
+      { field: "signedDate", sourcePage: 1, evidence: "01/06/2026", confidence: 0.95 },
+      { field: "packageName", sourcePage: 1, evidence: "Gói thi công", confidence: 0.95 },
+      { field: "contractorName", sourcePage: 1, evidence: "Nhà thầu A", confidence: 0.95 },
+      { field: "contractDurationDays", sourcePage: 2, evidence: "60 ngày", confidence: 0.95 },
+      { field: "serviceDurationText", sourcePage: 2, evidence: "Thời gian thực hiện hợp đồng là 60 ngày kể từ ngày ký biên bản bàn giao mặt bằng.", confidence: 0.95 },
+      { field: "unitExecutionTriggerText", sourcePage: 2, evidence: "kể từ ngày ký biên bản bàn giao mặt bằng", confidence: 0.95 },
+    ],
+  };
+  const draft = toContractFormDraft(extracted);
+  assert.equal(draft.contractDurationDays, 60);
+  assert.equal(draft.unitExecutionTriggerText, "kể từ ngày ký biên bản bàn giao mặt bằng");
+  assert.equal(draft.serviceProvisionDurationDays, undefined);
+  assert.equal(draft.unitExecutionDurationDays, undefined);
+  assert.equal(draft.unitExecutionContinuous, undefined);
+});
+
+test("CASE B: contract duration 255 days from contract effective date without per-unit duration", () => {
+  const extracted = {
+    contractNumber: "171/HĐ-NĐDH-DOBC.26",
+    signedDate: "2026-04-15",
+    packageName: "Cung cấp dịch vụ bảo dưỡng",
+    contractorName: "Công ty DOBC",
+    contractorAddress: null,
+    contractorPhone: null,
+    contractorRepresentative: null,
+    contractDurationDays: 255,
+    serviceProvisionDurationDays: null,
+    serviceDurationText: "Thời gian thực hiện hợp đồng 255 ngày kể từ ngày hợp đồng có hiệu lực.",
+    unitExecutionDurationDays: null,
+    unitExecutionContinuous: null,
+    unitExecutionTriggerText: "kể từ ngày hợp đồng có hiệu lực",
+    effectiveConditionText: "Kể từ ngày hợp đồng có hiệu lực",
+    fieldEvidence: [
+      { field: "contractNumber", sourcePage: 1, evidence: "171/HĐ-NĐDH-DOBC.26", confidence: 0.99 },
+      { field: "contractDurationDays", sourcePage: 2, evidence: "255 ngày", confidence: 0.99 },
+      { field: "unitExecutionTriggerText", sourcePage: 2, evidence: "kể từ ngày hợp đồng có hiệu lực", confidence: 0.99 },
+      { field: "serviceDurationText", sourcePage: 2, evidence: "Thời gian thực hiện hợp đồng 255 ngày kể từ ngày hợp đồng có hiệu lực.", confidence: 0.99 },
+    ],
+  };
+  const draft = toContractFormDraft(extracted);
+  assert.equal(draft.contractDurationDays, 255);
+  assert.equal(draft.unitExecutionTriggerText, "kể từ ngày hợp đồng có hiệu lực");
+  assert.equal(draft.unitExecutionDurationDays, undefined);
+  assert.equal(draft.serviceProvisionDurationDays, undefined);
+});
+
+test("CASE C: mixed goods and service contract with separated windows and handover trigger", () => {
+  const extracted = {
+    contractNumber: "94/HĐ-NĐDH-HI-PEC.26",
+    signedDate: "2026-03-20",
+    packageName: "Mua sắm hàng hóa và dịch vụ kỹ thuật",
+    contractorName: "Liên danh HI-PEC",
+    contractorAddress: null,
+    contractorPhone: null,
+    contractorRepresentative: null,
+    contractDurationDays: 225,
+    serviceProvisionDurationDays: 35,
+    serviceDurationText: "Thời gian thực hiện hợp đồng là 225 ngày; Cung cấp hàng hóa: 120 ngày; Dịch vụ: 35 ngày kể từ ngày Bên A bàn giao mặt bằng",
+    unitExecutionDurationDays: null,
+    unitExecutionContinuous: null,
+    unitExecutionTriggerText: "kể từ ngày Bên A bàn giao mặt bằng",
+    effectiveConditionText: "Từ ngày hợp đồng có hiệu lực",
+    fieldEvidence: [
+      { field: "contractNumber", sourcePage: 1, evidence: "94/HĐ-NĐDH-HI-PEC.26", confidence: 0.99 },
+      { field: "contractDurationDays", sourcePage: 2, evidence: "225 ngày", confidence: 0.99 },
+      { field: "serviceProvisionDurationDays", sourcePage: 2, evidence: "35 ngày", confidence: 0.95 },
+      { field: "serviceDurationText", sourcePage: 2, evidence: "Thời gian thực hiện hợp đồng là 225 ngày; Cung cấp hàng hóa: 120 ngày; Dịch vụ: 35 ngày kể từ ngày Bên A bàn giao mặt bằng", confidence: 0.99 },
+      { field: "unitExecutionTriggerText", sourcePage: 2, evidence: "kể từ ngày Bên A bàn giao mặt bằng", confidence: 0.95 },
+    ],
+  };
+  const draft = toContractFormDraft(extracted);
+  assert.equal(draft.contractDurationDays, 225);
+  assert.equal(draft.serviceProvisionDurationDays, 35);
+  assert.equal(draft.unitExecutionTriggerText, "kể từ ngày Bên A bàn giao mặt bằng");
+  assert.equal(draft.unitExecutionDurationDays, undefined);
+});
+
+test("CASE D: multi-lot contract preserves raw time clause and does not force per-unit model", () => {
+  const extracted = {
+    contractNumber: "136/HĐ-NĐDH-IDC.26",
+    signedDate: "2026-05-12",
+    packageName: "Gói nhiều lô",
+    contractorName: "Nhà thầu IDC",
+    contractorAddress: null,
+    contractorPhone: null,
+    contractorRepresentative: null,
+    contractDurationDays: 150,
+    serviceProvisionDurationDays: null,
+    serviceDurationText: "Thời gian thực hiện: Lô 1: 150 ngày; Lô 2: 60 ngày; Lô 3: 45 ngày kể từ ngày có hiệu lực",
+    unitExecutionDurationDays: null,
+    unitExecutionContinuous: null,
+    unitExecutionTriggerText: "kể từ ngày có hiệu lực",
+    effectiveConditionText: "Kể từ ngày ký và bên B nộp bảo đảm",
+    fieldEvidence: [
+      { field: "contractNumber", sourcePage: 1, evidence: "136/HĐ-NĐDH-IDC.26", confidence: 0.99 },
+      { field: "contractDurationDays", sourcePage: 2, evidence: "150 ngày", confidence: 0.95 },
+      { field: "serviceDurationText", sourcePage: 2, evidence: "Thời gian thực hiện: Lô 1: 150 ngày; Lô 2: 60 ngày; Lô 3: 45 ngày", confidence: 0.99 },
+    ],
+  };
+  const draft = toContractFormDraft(extracted);
+  assert.equal(draft.contractDurationDays, 150);
+  assert.equal(draft.serviceDurationText, "Thời gian thực hiện: Lô 1: 150 ngày; Lô 2: 60 ngày; Lô 3: 45 ngày kể từ ngày có hiệu lực");
+  assert.equal(draft.unitExecutionDurationDays, undefined);
+  assert.equal(draft.serviceProvisionDurationDays, undefined);
+});
+
+test("contract fields without evidence are not auto-filled", () => {
+  const draft = toContractFormDraft({
+    contractNumber: "999/HĐ", signedDate: null, packageName: "Không có căn cứ",
+    contractorName: null, contractorAddress: null, contractorPhone: null, contractorRepresentative: null,
+    contractDurationDays: null, serviceProvisionDurationDays: null, serviceDurationText: null,
+    unitExecutionDurationDays: null, unitExecutionContinuous: null, unitExecutionTriggerText: null,
+    effectiveConditionText: null, fieldEvidence: [],
+  });
+  assert.equal(draft.contractNumber, undefined);
+  assert.equal(draft.packageName, undefined);
 });
 
 test("PDF import creates safe checklist drafts and validates weight allocation", () => {

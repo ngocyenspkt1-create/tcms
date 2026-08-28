@@ -7,6 +7,7 @@ import { useState, type FormEvent, type ReactNode } from "react";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { ContractCreatePdfImport } from "@/components/contracts/contract-create-pdf-import";
+import { VietnameseDateInput } from "@/components/contracts/vietnamese-date-input";
 import { useContracts, type ContractInput } from "@/components/contracts/contract-store";
 import type { ContractFormImportDraft, PendingContractPdfImport } from "@/types/contract-create-import";
 import type { Contract, ContractStatus, Supervisor } from "@/types/contract";
@@ -53,8 +54,14 @@ function createBlankContract(): ContractInput {
     supervisors: [createBlankSupervisor()],
     handoverDocument: "",
     handoverDate: "",
+    signedDate: "",
     contractDurationDays: undefined,
+    serviceProvisionDurationDays: undefined,
     serviceDurationText: "",
+    unitExecutionDurationDays: undefined,
+    unitExecutionContinuous: undefined,
+    unitExecutionTriggerText: "",
+    effectiveConditionText: "",
     contractStartDate: "",
     siteHandoverDate: "",
     goodsEndDate: "",
@@ -245,7 +252,10 @@ function ContractEditor({
       contractorRepresentative: optionalText(draft.contractorRepresentative),
       handoverDocument: optionalText(draft.handoverDocument),
       handoverDate: optionalText(draft.handoverDate),
+      signedDate: optionalText(draft.signedDate),
       serviceDurationText: optionalText(draft.serviceDurationText),
+      unitExecutionTriggerText: optionalText(draft.unitExecutionTriggerText),
+      effectiveConditionText: optionalText(draft.effectiveConditionText),
       contractStartDate: optionalText(draft.contractStartDate),
       siteHandoverDate: optionalText(draft.siteHandoverDate),
       goodsEndDate: optionalText(draft.goodsEndDate),
@@ -359,11 +369,9 @@ function ContractEditor({
             />
           </Field>
           <Field label="Ngày giao hợp đồng">
-            <input
-              type="date"
-              value={draft.handoverDate ?? ""}
-              onChange={(event) => updateField("handoverDate", event.target.value)}
-              className={inputClassName}
+            <VietnameseDateInput
+              value={draft.handoverDate}
+              onChange={(val) => updateField("handoverDate", val ?? "")}
             />
           </Field>
         </div>
@@ -424,7 +432,13 @@ function ContractEditor({
               ))}
             </select>
           </Field>
-          <Field label="Thời gian thực hiện (ngày)">
+          <Field label="Ngày ký hợp đồng">
+            <VietnameseDateInput
+              value={draft.signedDate}
+              onChange={(val) => updateField("signedDate", val ?? "")}
+            />
+          </Field>
+          <Field label="Tổng thời gian hợp đồng (ngày)">
             <input
               type="number"
               min="0"
@@ -438,60 +452,106 @@ function ContractEditor({
               className={inputClassName}
             />
           </Field>
-          <Field label="Thời gian hàng hóa/dịch vụ">
+          <Field label="Thời gian cung cấp dịch vụ (ngày)">
             <input
+              type="number"
+              min="0"
+              value={draft.serviceProvisionDurationDays ?? ""}
+              onChange={(event) =>
+                updateField(
+                  "serviceProvisionDurationDays",
+                  event.target.value ? Number(event.target.value) : undefined
+                )
+              }
+              className={inputClassName}
+            />
+          </Field>
+          <Field label="Thời gian thực hiện theo đơn vị/phạm vi (ngày, nếu có)">
+            <input
+              type="number"
+              min="1"
+              value={draft.unitExecutionDurationDays ?? ""}
+              onChange={(event) =>
+                updateField(
+                  "unitExecutionDurationDays",
+                  event.target.value ? Number(event.target.value) : undefined
+                )
+              }
+              className={inputClassName}
+            />
+          </Field>
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <label className="flex items-center gap-2 text-[10px] font-semibold text-slate-700">
+              <input
+                type="checkbox"
+                checked={draft.unitExecutionContinuous === true}
+                onChange={(event) => updateField("unitExecutionContinuous", event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-blue-700"
+              />
+              Thời gian thực hiện liên tục
+            </label>
+          </div>
+          <Field label="Mốc bắt đầu thời gian thực hiện (nếu có)" wide>
+            <input
+              value={draft.unitExecutionTriggerText ?? ""}
+              onChange={(event) => updateField("unitExecutionTriggerText", event.target.value)}
+              className={inputClassName}
+              placeholder="Ví dụ: Kể từ ngày nhận bàn giao mặt bằng"
+            />
+          </Field>
+          <Field label="Điều khoản thời gian dịch vụ (nguyên văn)" wide>
+            <textarea
               value={draft.serviceDurationText ?? ""}
               onChange={(event) => updateField("serviceDurationText", event.target.value)}
-              className={inputClassName}
-              placeholder="Ví dụ: Dịch vụ 90 ngày"
+              className={textareaClassName}
+              placeholder="Giữ đầy đủ điều kiện thời gian trong hợp đồng"
+            />
+          </Field>
+          <Field label="Điều kiện có hiệu lực" wide>
+            <textarea
+              value={draft.effectiveConditionText ?? ""}
+              onChange={(event) => updateField("effectiveConditionText", event.target.value)}
+              className={textareaClassName}
+              placeholder="Ví dụ: Hai bên ký và nhà thầu nộp bảo đảm thực hiện hợp đồng"
             />
           </Field>
           <Field label="Ngày mời triển khai">
-            <input
-              type="date"
-              value={draft.implementationInvitationDate ?? ""}
-              onChange={(event) => updateField("implementationInvitationDate", event.target.value)}
-              className={inputClassName}
+            <VietnameseDateInput
+              value={draft.implementationInvitationDate}
+              onChange={(val) => updateField("implementationInvitationDate", val ?? "")}
             />
           </Field>
-          <Field label="Ngày bắt đầu hợp đồng">
-            <input
-              type="date"
-              value={draft.contractStartDate ?? ""}
-              onChange={(event) => updateField("contractStartDate", event.target.value)}
-              className={inputClassName}
+          <Field
+            label="Ngày hiệu lực/bắt đầu thực tế"
+            hint="Không tự lấy ngày ký. Chỉ nhập khi đã xác nhận đủ điều kiện có hiệu lực."
+          >
+            <VietnameseDateInput
+              value={draft.contractStartDate}
+              onChange={(val) => updateField("contractStartDate", val ?? "")}
             />
           </Field>
           <Field label="Ngày bàn giao mặt bằng">
-            <input
-              type="date"
-              value={draft.siteHandoverDate ?? ""}
-              onChange={(event) => updateField("siteHandoverDate", event.target.value)}
-              className={inputClassName}
+            <VietnameseDateInput
+              value={draft.siteHandoverDate}
+              onChange={(val) => updateField("siteHandoverDate", val ?? "")}
             />
           </Field>
           <Field label="Kết thúc giao hàng">
-            <input
-              type="date"
-              value={draft.goodsEndDate ?? ""}
-              onChange={(event) => updateField("goodsEndDate", event.target.value)}
-              className={inputClassName}
+            <VietnameseDateInput
+              value={draft.goodsEndDate}
+              onChange={(val) => updateField("goodsEndDate", val ?? "")}
             />
           </Field>
           <Field label="Kết thúc dịch vụ">
-            <input
-              type="date"
-              value={draft.serviceEndDate ?? ""}
-              onChange={(event) => updateField("serviceEndDate", event.target.value)}
-              className={inputClassName}
+            <VietnameseDateInput
+              value={draft.serviceEndDate}
+              onChange={(val) => updateField("serviceEndDate", val ?? "")}
             />
           </Field>
           <Field label="Kết thúc hợp đồng">
-            <input
-              type="date"
-              value={draft.contractEndDate ?? ""}
-              onChange={(event) => updateField("contractEndDate", event.target.value)}
-              className={inputClassName}
+            <VietnameseDateInput
+              value={draft.contractEndDate}
+              onChange={(val) => updateField("contractEndDate", val ?? "")}
             />
           </Field>
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -507,11 +567,9 @@ function ContractEditor({
           </div>
           {draft.isExtended && (
             <Field label="Gia hạn đến" required>
-              <input
-                type="date"
-                value={draft.extendedUntil ?? ""}
-                onChange={(event) => updateField("extendedUntil", event.target.value)}
-                className={inputClassName}
+              <VietnameseDateInput
+                value={draft.extendedUntil}
+                onChange={(val) => updateField("extendedUntil", val ?? "")}
               />
             </Field>
           )}

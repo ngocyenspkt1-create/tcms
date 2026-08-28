@@ -6,6 +6,8 @@ import {
   useState,
 } from "react";
 
+import { formatDate } from "@/lib/contract-utils";
+import { VietnameseDateInput } from "@/components/contracts/vietnamese-date-input";
 import type {
   ContractItem,
   ContractItemTracking,
@@ -828,11 +830,12 @@ export function ContractItemsSection({
                     </td>
 
                     <td className="px-2 py-2">
-                      {item.plannedEndDate ||
-                        `${
-                          item.completionDurationDays ??
-                          "-"
-                        } ngày`}
+                      {item.plannedEndDate
+                        ? formatDate(item.plannedEndDate)
+                        : `${
+                            item.completionDurationDays ??
+                            "-"
+                          } ngày`}
                     </td>
 
                     <td className="px-2 py-2">
@@ -932,7 +935,11 @@ export function ContractItemsSection({
                   <h4 className="text-[11px] font-bold text-slate-800">Nhật ký tình trạng hằng ngày</h4>
                   {capabilities.canUpdateProgress && (
                     <form onSubmit={appendDailyLog} className="mt-3 space-y-2 rounded-lg bg-slate-50 p-3">
-                      <input type="date" required className={inputClass} value={dailyLogDate} onChange={(event) => setDailyLogDate(event.target.value)} />
+                      <VietnameseDateInput
+                        required
+                        value={dailyLogDate}
+                        onChange={(val) => setDailyLogDate(val ?? "")}
+                      />
                       <textarea required rows={3} className={textareaClass} value={dailyLogNote} onChange={(event) => setDailyLogNote(event.target.value)} placeholder="Cập nhật tình trạng hôm nay..." />
                       <div className="flex justify-end"><button disabled={trackingSaving || !dailyLogNote.trim()} className="h-8 rounded-lg bg-blue-700 px-3 text-[10px] font-semibold text-white disabled:opacity-40">Thêm nhật ký</button></div>
                     </form>
@@ -940,7 +947,7 @@ export function ContractItemsSection({
                   <div className="mt-3 max-h-72 space-y-2 overflow-y-auto">
                     {tracking.dailyLogs.map((log) => (
                       <article key={log.id} className="rounded-lg border border-slate-100 p-2 text-[10px]">
-                        <p className="font-bold text-slate-700">{log.logDate} · {log.createdBy}</p>
+                        <p className="font-bold text-slate-700">{formatDate(log.logDate)} · {log.createdBy}</p>
                         <p className="mt-1 whitespace-pre-wrap text-slate-600">{log.note}</p>
                         <p className="mt-1 text-[9px] text-slate-400">{new Date(log.createdAt).toLocaleString("vi-VN")}</p>
                       </article>
@@ -1076,8 +1083,18 @@ export function ContractItemsSection({
                             <Field label="Đơn vị"><input className={inputClass} value={draft.unit} onChange={(e) => updateDraft(index, "unit", e.target.value)} /></Field>
                             <Field label="Trọng số (%)"><input type="number" min="0" max="100" step="0.01" disabled={weightAllocationMethod === "EQUAL"} className={inputClass} value={draft.weightPercent ?? ""} onChange={(e) => updateDraft(index, "weightPercent", e.target.value === "" ? null : Number(e.target.value))} /></Field>
                             <Field label="Thời lượng (ngày)"><input type="number" min="1" step="1" className={inputClass} value={draft.completionDurationDays ?? ""} onChange={(e) => updateDraft(index, "completionDurationDays", e.target.value === "" ? null : Number(e.target.value))} /></Field>
-                            <Field label="Ngày bắt đầu KH"><input type="date" className={inputClass} value={draft.plannedStartDate} onChange={(e) => updateDraft(index, "plannedStartDate", e.target.value)} /></Field>
-                            <Field label="Ngày kết thúc KH"><input type="date" className={inputClass} value={draft.plannedEndDate} onChange={(e) => updateDraft(index, "plannedEndDate", e.target.value)} /></Field>
+                            <Field label="Ngày bắt đầu KH">
+                              <VietnameseDateInput
+                                value={draft.plannedStartDate}
+                                onChange={(val) => updateDraft(index, "plannedStartDate", val ?? "")}
+                              />
+                            </Field>
+                            <Field label="Ngày kết thúc KH">
+                              <VietnameseDateInput
+                                value={draft.plannedEndDate}
+                                onChange={(val) => updateDraft(index, "plannedEndDate", val ?? "")}
+                              />
+                            </Field>
                             <Field label="Nội dung chi tiết" wide><textarea rows={2} className={textareaClass} value={draft.workContent} onChange={(e) => updateDraft(index, "workContent", e.target.value)} /></Field>
                           </div>
                           <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -1392,46 +1409,16 @@ export function ContractItemsSection({
                 </Field>
 
                 <Field label="Bắt đầu kế hoạch">
-                  <input
-                    type="date"
-                    className={
-                      inputClass
-                    }
-                    value={
-                      form.plannedStartDate ??
-                      ""
-                    }
-                    onChange={(
-                      e,
-                    ) =>
-                      set(
-                        "plannedStartDate",
-                        e.target
-                          .value,
-                      )
-                    }
+                  <VietnameseDateInput
+                    value={form.plannedStartDate}
+                    onChange={(val) => set("plannedStartDate", val)}
                   />
                 </Field>
 
                 <Field label="Kết thúc kế hoạch">
-                  <input
-                    type="date"
-                    className={
-                      inputClass
-                    }
-                    value={
-                      form.plannedEndDate ??
-                      ""
-                    }
-                    onChange={(
-                      e,
-                    ) =>
-                      set(
-                        "plannedEndDate",
-                        e.target
-                          .value,
-                      )
-                    }
+                  <VietnameseDateInput
+                    value={form.plannedEndDate}
+                    onChange={(val) => set("plannedEndDate", val)}
                   />
                 </Field>
               </FormSection>
@@ -1573,46 +1560,16 @@ export function ContractItemsSection({
                   </Field>
 
                   <Field label="Bắt đầu thực tế">
-                    <input
-                      type="date"
-                      className={
-                        inputClass
-                      }
-                      value={
-                        form.actualStartDate ??
-                        ""
-                      }
-                      onChange={(
-                        e,
-                      ) =>
-                        set(
-                          "actualStartDate",
-                          e.target
-                            .value,
-                        )
-                      }
+                    <VietnameseDateInput
+                      value={form.actualStartDate}
+                      onChange={(val) => set("actualStartDate", val)}
                     />
                   </Field>
 
                   <Field label="Kết thúc thực tế">
-                    <input
-                      type="date"
-                      className={
-                        inputClass
-                      }
-                      value={
-                        form.actualEndDate ??
-                        ""
-                      }
-                      onChange={(
-                        e,
-                      ) =>
-                        set(
-                          "actualEndDate",
-                          e.target
-                            .value,
-                        )
-                      }
+                    <VietnameseDateInput
+                      value={form.actualEndDate}
+                      onChange={(val) => set("actualEndDate", val)}
                     />
                   </Field>
 

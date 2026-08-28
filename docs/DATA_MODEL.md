@@ -63,6 +63,14 @@ Ràng buộc đã có cho phần trăm, khối lượng không âm, ngày kết 
 
 PDF Import Phase 2A–2D trong source dùng provider abstraction. Provider OpenAI gửi PDF đã được người dùng xác nhận khử nhạy cảm vào Responses API với JSON Schema nghiêm ngặt, tạo `ContractItemImportDraft`, hiển thị evidence/page/confidence để sửa, rồi validate lại và nhập nhiều hạng mục trong một transaction. OCR local chỉ trả text fallback khi AI không khả dụng; fallback không tự tạo hạng mục.
 
+Contract draft từ PDF tách dữ liệu thời gian pháp lý thành `signedDate`, `contractDurationDays`,
+`serviceProvisionDurationDays`, `unitExecutionDurationDays`, `unitExecutionContinuous`,
+`unitExecutionTriggerText` và `effectiveConditionText`. `contractStartDate` là ngày hiệu lực/bắt đầu
+thực tế do người dùng xác nhận, không được tự suy ra từ ngày ký. Mỗi trường Contract do AI điền
+phải có `fieldEvidence` gồm trang, dẫn chứng và độ tin cậy; thiếu dẫn chứng thì mapping để trống.
+Các trường quản trị nội bộ như đơn vị chủ trì, giao hợp đồng, mời triển khai, bàn giao thực tế,
+gia hạn, tiến độ và nhân sự không thuộc schema trích xuất từ PDF hợp đồng.
+
 ## Document — IN PROGRESS
 
 Bảng lưu metadata, SHA-256, storage object ID, key version, trạng thái quét malware và archive. Chỉ file `CLEAN` được policy cho đọc. Kho file, antivirus và API chưa được xây dựng.

@@ -38,8 +38,14 @@ function mapRow(row: ContractRow): Contract {
     leadDepartment: row.lead_department, contractorName: row.contractor_name,
     ...contractor, supervisors: row.supervisors ?? [],
     handoverDocument: row.handover_document as string | undefined,
-    handoverDate: date(row.handover_date), contractDurationDays: row.contract_duration_days as number | undefined,
+    handoverDate: date(row.handover_date), signedDate: date(row.signed_date),
+    contractDurationDays: row.contract_duration_days as number | undefined,
+    serviceProvisionDurationDays: row.service_provision_duration_days as number | undefined,
     serviceDurationText: row.service_duration_text as string | undefined,
+    unitExecutionDurationDays: row.unit_execution_duration_days as number | undefined,
+    unitExecutionContinuous: typeof row.unit_execution_continuous === "boolean" ? row.unit_execution_continuous : undefined,
+    unitExecutionTriggerText: row.unit_execution_trigger_text as string | undefined,
+    effectiveConditionText: row.effective_condition_text as string | undefined,
     contractStartDate: date(row.contract_start_date), siteHandoverDate: date(row.site_handover_date),
     goodsEndDate: date(row.goods_end_date), serviceEndDate: date(row.service_end_date), contractEndDate: date(row.contract_end_date),
     isExtended: Boolean(row.is_extended), extendedUntil: date(row.extended_until),
@@ -78,17 +84,22 @@ export class PostgresContractRepository {
     const secret = encrypted(input);
     const result = await this.client.query(`INSERT INTO tcms.contracts
       (contract_number, package_name, lead_department_id, contractor_name, contractor_sensitive_ciphertext,
-       contractor_sensitive_key_version, handover_document, handover_date, contract_duration_days, service_duration_text,
-       contract_start_date, site_handover_date, goods_end_date, service_end_date, contract_end_date, is_extended,
-       extended_until, implementation_invitation_date, progress_percent, progress_note, commercial_sensitive_ciphertext,
-       commercial_sensitive_key_version, payment_settlement_status, status, created_by, updated_by)
-      SELECT $1,$2,d.id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$24
-      FROM tcms.departments d WHERE d.code=$25 AND d.active RETURNING id`,
+       contractor_sensitive_key_version, handover_document, handover_date, signed_date, contract_duration_days,
+       service_provision_duration_days, service_duration_text, unit_execution_duration_days, unit_execution_continuous,
+       unit_execution_trigger_text, effective_condition_text, contract_start_date, site_handover_date, goods_end_date,
+       service_end_date, contract_end_date, is_extended, extended_until, implementation_invitation_date, progress_percent,
+       progress_note, commercial_sensitive_ciphertext, commercial_sensitive_key_version, payment_settlement_status,
+       status, created_by, updated_by)
+      SELECT $1,$2,d.id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$30
+      FROM tcms.departments d WHERE d.code=$31 AND d.active RETURNING id`,
       [input.contractNumber,input.packageName,input.contractorName,secret.contractor.ciphertext,secret.contractor.keyVersion,
-       input.handoverDocument,input.handoverDate||null,input.contractDurationDays,input.serviceDurationText,input.contractStartDate||null,
-       input.siteHandoverDate||null,input.goodsEndDate||null,input.serviceEndDate||null,input.contractEndDate||null,input.isExtended,
-       input.extendedUntil||null,input.implementationInvitationDate||null,input.progressPercent,input.progressNote,
-       secret.commercial.ciphertext,secret.commercial.keyVersion,input.paymentSettlementStatus,input.status,actorId,input.leadDepartment]);
+       input.handoverDocument,input.handoverDate||null,input.signedDate||null,input.contractDurationDays,
+       input.serviceProvisionDurationDays,input.serviceDurationText,input.unitExecutionDurationDays,
+       input.unitExecutionContinuous ?? null,input.unitExecutionTriggerText,input.effectiveConditionText,
+       input.contractStartDate||null,input.siteHandoverDate||null,input.goodsEndDate||null,input.serviceEndDate||null,
+       input.contractEndDate||null,input.isExtended,input.extendedUntil||null,input.implementationInvitationDate||null,
+       input.progressPercent,input.progressNote,secret.commercial.ciphertext,secret.commercial.keyVersion,
+       input.paymentSettlementStatus,input.status,actorId,input.leadDepartment]);
     if (!result.rowCount) throw new Error(`DEPARTMENT_NOT_FOUND:${input.leadDepartment}`);
     const id = result.rows[0].id as string;
     await this.client.query(`INSERT INTO tcms.contract_departments (contract_id, department_id, participation_type, assigned_by)
@@ -105,16 +116,22 @@ export class PostgresContractRepository {
     const result = await this.client.query(`UPDATE tcms.contracts c SET
       contract_number=$1, package_name=$2, lead_department_id=d.id, contractor_name=$3,
       contractor_sensitive_ciphertext=$4, contractor_sensitive_key_version=$5, handover_document=$6, handover_date=$7,
-      contract_duration_days=$8, service_duration_text=$9, contract_start_date=$10, site_handover_date=$11, goods_end_date=$12,
-      service_end_date=$13, contract_end_date=$14, is_extended=$15, extended_until=$16, implementation_invitation_date=$17,
-      progress_percent=$18, progress_note=$19, commercial_sensitive_ciphertext=$20, commercial_sensitive_key_version=$21,
-      payment_settlement_status=$22, status=$23, updated_by=$24 FROM tcms.departments d
-      WHERE c.id=$25 AND c.version=$26 AND d.code=$27 AND d.active RETURNING c.id`,
+      signed_date=$8, contract_duration_days=$9, service_provision_duration_days=$10, service_duration_text=$11,
+      unit_execution_duration_days=$12, unit_execution_continuous=$13, unit_execution_trigger_text=$14,
+      effective_condition_text=$15, contract_start_date=$16, site_handover_date=$17, goods_end_date=$18,
+      service_end_date=$19, contract_end_date=$20, is_extended=$21, extended_until=$22,
+      implementation_invitation_date=$23, progress_percent=$24, progress_note=$25,
+      commercial_sensitive_ciphertext=$26, commercial_sensitive_key_version=$27,
+      payment_settlement_status=$28, status=$29, updated_by=$30 FROM tcms.departments d
+      WHERE c.id=$31 AND c.version=$32 AND d.code=$33 AND d.active RETURNING c.id`,
       [input.contractNumber,input.packageName,input.contractorName,secret.contractor.ciphertext,secret.contractor.keyVersion,
-       input.handoverDocument,input.handoverDate||null,input.contractDurationDays,input.serviceDurationText,input.contractStartDate||null,
-       input.siteHandoverDate||null,input.goodsEndDate||null,input.serviceEndDate||null,input.contractEndDate||null,input.isExtended,
-       input.extendedUntil||null,input.implementationInvitationDate||null,input.progressPercent,input.progressNote,
-       secret.commercial.ciphertext,secret.commercial.keyVersion,input.paymentSettlementStatus,input.status,actorId,id,expectedVersion,input.leadDepartment]);
+       input.handoverDocument,input.handoverDate||null,input.signedDate||null,input.contractDurationDays,
+       input.serviceProvisionDurationDays,input.serviceDurationText,input.unitExecutionDurationDays,
+       input.unitExecutionContinuous ?? null,input.unitExecutionTriggerText,input.effectiveConditionText,
+       input.contractStartDate||null,input.siteHandoverDate||null,input.goodsEndDate||null,input.serviceEndDate||null,
+       input.contractEndDate||null,input.isExtended,input.extendedUntil||null,input.implementationInvitationDate||null,
+       input.progressPercent,input.progressNote,secret.commercial.ciphertext,secret.commercial.keyVersion,
+       input.paymentSettlementStatus,input.status,actorId,id,expectedVersion,input.leadDepartment]);
     if (!result.rowCount) throw new Error("CONCURRENT_UPDATE_OR_NOT_FOUND");
     if (supervisorsChanged) await replaceSupervisors(this.client, id, input.supervisors, actorId);
     return (await this.findById(id))!;

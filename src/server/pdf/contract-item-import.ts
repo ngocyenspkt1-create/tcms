@@ -7,6 +7,10 @@ import {
   validateImportWeightTotal,
 } from "../contracts/contract-item-service.ts";
 import type { ContractItemWeightAllocationMethod } from "../../types/contract-item-import";
+import type {
+  ContractEvidenceField,
+  ContractFieldEvidence,
+} from "../../types/contract-create-import";
 
 export const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024;
 export const MAX_IMPORT_ITEMS = 100;
@@ -31,24 +35,25 @@ export type ExtractedContractItem = {
 
 export type ExtractedContractDraft = {
   contractNumber: string | null;
+  signedDate: string | null;
   packageName: string | null;
-  leadDepartment: string | null;
   contractorName: string | null;
   contractorAddress: string | null;
   contractorPhone: string | null;
   contractorRepresentative: string | null;
-  handoverDocument: string | null;
-  handoverDate: string | null;
   contractDurationDays: number | null;
+  serviceProvisionDurationDays: number | null;
   serviceDurationText: string | null;
-  contractStartDate: string | null;
-  siteHandoverDate: string | null;
-  goodsEndDate: string | null;
-  serviceEndDate: string | null;
-  contractEndDate: string | null;
-  isExtended: boolean | null;
-  extendedUntil: string | null;
-  implementationInvitationDate: string | null;
+  unitExecutionDurationDays: number | null;
+  unitExecutionContinuous: boolean | null;
+  unitExecutionTriggerText: string | null;
+  effectiveConditionText: string | null;
+  fieldEvidence: Array<{
+    field: string | null;
+    sourcePage: number | null;
+    evidence: string | null;
+    confidence: number | null;
+  }>;
 };
 
 export type ContractItemExtractionResult = {
@@ -78,28 +83,73 @@ function nullableDate(value: string | null) {
 }
 
 export function toContractFormDraft(extracted: ExtractedContractDraft) {
-  const duration = extracted.contractDurationDays;
+  const groundedFields = new Set(
+    (extracted.fieldEvidence ?? [])
+      .filter((entry) => entry.evidence?.trim())
+      .map((entry) => entry.field?.trim()),
+  );
+  const grounded = <T>(field: ContractEvidenceField, value: T): T | null =>
+    groundedFields.has(field) ? value : null;
+  const duration = grounded("contractDurationDays", extracted.contractDurationDays);
+  const serviceProvisionDuration = grounded("serviceProvisionDurationDays", extracted.serviceProvisionDurationDays);
+  const unitExecutionDuration = grounded("unitExecutionDurationDays", extracted.unitExecutionDurationDays);
   return {
-    contractNumber: nullableText(extracted.contractNumber),
-    packageName: nullableText(extracted.packageName),
-    leadDepartment: nullableText(extracted.leadDepartment),
-    contractorName: nullableText(extracted.contractorName),
-    contractorAddress: nullableText(extracted.contractorAddress),
-    contractorPhone: nullableText(extracted.contractorPhone),
-    contractorRepresentative: nullableText(extracted.contractorRepresentative),
-    handoverDocument: nullableText(extracted.handoverDocument),
-    handoverDate: nullableDate(extracted.handoverDate),
+    contractNumber: nullableText(grounded("contractNumber", extracted.contractNumber)),
+    signedDate: nullableDate(grounded("signedDate", extracted.signedDate)),
+    packageName: nullableText(grounded("packageName", extracted.packageName)),
+    contractorName: nullableText(grounded("contractorName", extracted.contractorName)),
+    contractorAddress: nullableText(grounded("contractorAddress", extracted.contractorAddress)),
+    contractorPhone: nullableText(grounded("contractorPhone", extracted.contractorPhone)),
+    contractorRepresentative: nullableText(grounded("contractorRepresentative", extracted.contractorRepresentative)),
     contractDurationDays: duration !== null && Number.isInteger(duration) && duration >= 0 ? duration : undefined,
-    serviceDurationText: nullableText(extracted.serviceDurationText),
-    contractStartDate: nullableDate(extracted.contractStartDate),
-    siteHandoverDate: nullableDate(extracted.siteHandoverDate),
-    goodsEndDate: nullableDate(extracted.goodsEndDate),
-    serviceEndDate: nullableDate(extracted.serviceEndDate),
-    contractEndDate: nullableDate(extracted.contractEndDate),
-    isExtended: extracted.isExtended ?? undefined,
-    extendedUntil: nullableDate(extracted.extendedUntil),
-    implementationInvitationDate: nullableDate(extracted.implementationInvitationDate),
+    serviceProvisionDurationDays:
+      serviceProvisionDuration !== null && Number.isInteger(serviceProvisionDuration) && serviceProvisionDuration >= 0
+        ? serviceProvisionDuration
+        : undefined,
+    serviceDurationText: nullableText(grounded("serviceDurationText", extracted.serviceDurationText)),
+    unitExecutionDurationDays:
+      unitExecutionDuration !== null && Number.isInteger(unitExecutionDuration) && unitExecutionDuration > 0
+        ? unitExecutionDuration
+        : undefined,
+    unitExecutionContinuous: grounded("unitExecutionContinuous", extracted.unitExecutionContinuous) ?? undefined,
+    unitExecutionTriggerText: nullableText(grounded("unitExecutionTriggerText", extracted.unitExecutionTriggerText)),
+    effectiveConditionText: nullableText(grounded("effectiveConditionText", extracted.effectiveConditionText)),
   };
+}
+
+const contractEvidenceFields = new Set<ContractEvidenceField>([
+  "contractNumber",
+  "signedDate",
+  "packageName",
+  "contractorName",
+  "contractorAddress",
+  "contractorPhone",
+  "contractorRepresentative",
+  "contractDurationDays",
+  "serviceProvisionDurationDays",
+  "serviceDurationText",
+  "unitExecutionDurationDays",
+  "unitExecutionContinuous",
+  "unitExecutionTriggerText",
+  "effectiveConditionText",
+]);
+
+export function toContractFieldEvidence(extracted: ExtractedContractDraft): ContractFieldEvidence[] {
+  return (extracted.fieldEvidence ?? []).flatMap((entry) => {
+    const field = entry.field?.trim() as ContractEvidenceField | undefined;
+    const evidence = entry.evidence?.trim();
+    if (!field || !contractEvidenceFields.has(field) || !evidence) return [];
+    return [{
+      field,
+      sourcePage: entry.sourcePage !== null && Number.isInteger(entry.sourcePage) && entry.sourcePage > 0
+        ? entry.sourcePage
+        : null,
+      evidence,
+      confidence: entry.confidence !== null && entry.confidence >= 0 && entry.confidence <= 1
+        ? entry.confidence
+        : null,
+    }];
+  });
 }
 
 export function validatePdfUpload(file: File) {
