@@ -20,6 +20,7 @@ import type {
   ContractItemWeightAllocationMethod,
   PdfImportPreviewResponse,
 } from "@/types/contract-item-import";
+import type { WorkScope } from "@/types/contract-structure";
 
 const emptyItem: ContractItemInput = {
   serviceDescription: "",
@@ -188,6 +189,7 @@ export function ContractItemsSection({
   const [items, setItems] = useState<
     ContractItem[]
   >([]);
+  const [workScopes, setWorkScopes] = useState<WorkScope[]>([]);
 
   const [summary, setSummary] =
     useState<ContractItemSummary | null>(
@@ -262,7 +264,7 @@ export function ContractItemsSection({
       try {
         setError(null);
 
-        const data = await readJson<{
+        const [data, scopeData] = await Promise.all([readJson<{
           items: ContractItem[];
           summary: ContractItemSummary;
           capabilities: { canUpdateIdentity: boolean; canUpdateProgress: boolean };
@@ -275,11 +277,14 @@ export function ContractItemsSection({
               cache: "no-store",
             },
           ),
-        );
+        ), readJson<{ scopes: WorkScope[] }>(
+          await fetch(`/api/contracts/${encodeURIComponent(contractId)}/scopes`, { cache: "no-store" }),
+        )]);
 
         setItems(data.items);
         setSummary(data.summary);
         setCapabilities(data.capabilities);
+        setWorkScopes(scopeData.scopes);
       } catch (e) {
         setError(
           e instanceof Error
@@ -752,6 +757,7 @@ export function ContractItemsSection({
               <tr>
                 {[
                   "STT/Mã",
+                  "Phạm vi",
                   "Hạng mục",
                   "Khối lượng",
                   "ĐVT",
@@ -781,6 +787,12 @@ export function ContractItemsSection({
                     <td className="px-2 py-2 font-semibold">
                       {item.itemCode ||
                         item.sequenceNumber}
+                    </td>
+
+                    <td className="px-2 py-2">
+                      {item.workScopeId
+                        ? workScopes.find((scope) => scope.id === item.workScopeId)?.name ?? "Phạm vi đã liên kết"
+                        : "-"}
                     </td>
 
                     <td className="max-w-xs px-2 py-2">
@@ -1261,6 +1273,21 @@ export function ContractItemsSection({
                       )
                     }
                   />
+                </Field>
+
+                <Field label="Phạm vi công việc">
+                  <select
+                    className={inputClass}
+                    value={form.workScopeId ?? ""}
+                    onChange={(e) => set("workScopeId", e.target.value || undefined)}
+                  >
+                    <option value="">Không gắn phạm vi</option>
+                    {workScopes.map((scope) => (
+                      <option key={scope.id} value={scope.id}>
+                        {scope.code ? `${scope.code} - ` : ""}{scope.name}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
 
                 <Field label="Khối lượng theo hợp đồng">

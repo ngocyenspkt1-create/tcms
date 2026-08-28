@@ -1,4 +1,5 @@
 import { CONTRACT_ITEM_STATUSES, type ContractItem, type ContractItemInput, type ContractItemSummary } from "../../types/contract-item.ts";
+import { z } from "zod";
 
 const WEIGHT_TOLERANCE = 0.005;
 
@@ -25,13 +26,18 @@ export function parseContractItemInput(value: unknown): ContractItemInput {
   const weightPercent = optionalNumber(raw.weightPercent);
   const progressPercent = optionalNumber(raw.progressPercent);
   const status = raw.status;
+  const workScopeId = raw.workScopeId === undefined || raw.workScopeId === null || raw.workScopeId === ""
+    ? undefined
+    : z.uuid().safeParse(raw.workScopeId);
   if (!serviceDescription || weightPercent === undefined || progressPercent === undefined) throw new SyntaxError("MISSING_REQUIRED_FIELDS");
   if (weightPercent < 0 || weightPercent > 100 || progressPercent < 0 || progressPercent > 100) throw new SyntaxError("INVALID_CONTRACT_ITEM_FIELDS");
   if ((quantity !== undefined && quantity < 0) || (completedQuantity !== undefined && completedQuantity < 0) || (quantity !== undefined && completedQuantity !== undefined && completedQuantity > quantity)) throw new SyntaxError("INVALID_CONTRACT_ITEM_QUANTITY");
   if (completionDurationDays !== undefined && (!Number.isInteger(completionDurationDays) || completionDurationDays <= 0)) throw new SyntaxError("INVALID_CONTRACT_ITEM_DURATION");
   if (typeof status !== "string" || !CONTRACT_ITEM_STATUSES.includes(status as (typeof CONTRACT_ITEM_STATUSES)[number])) throw new SyntaxError("INVALID_CONTRACT_ITEM_STATUS");
+  if (workScopeId && !workScopeId.success) throw new SyntaxError("INVALID_CONTRACT_ITEM_SCOPE");
   return {
     itemCode: optionalText(raw.itemCode), groupCode: optionalText(raw.groupCode), groupName: optionalText(raw.groupName),
+    workScopeId: workScopeId ? workScopeId.data : undefined,
     serviceDescription, workContent: optionalText(raw.workContent), quantity, completedQuantity,
     unit: optionalText(raw.unit), serviceLocation: optionalText(raw.serviceLocation), completionDurationDays,
     weightPercent, progressPercent, plannedStartDate: optionalText(raw.plannedStartDate), plannedEndDate: optionalText(raw.plannedEndDate),

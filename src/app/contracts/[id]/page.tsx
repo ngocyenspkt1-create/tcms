@@ -5,6 +5,7 @@ import { use } from "react";
 
 import { useContracts } from "@/components/contracts/contract-store";
 import { ContractItemsSection } from "@/components/contracts/contract-items-section";
+import { ContractStructureSection } from "@/components/contracts/contract-structure-section";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import {
@@ -348,6 +349,8 @@ export default function ContractDetailPage({
                     <InfoItem label="Điều kiện có hiệu lực" value={contract.effectiveConditionText} wide />
                   </dl>
                 </SectionCard>
+
+                <ContractStructureSection contractId={contract.id} />
 
                 <ContractItemsSection contractId={contract.id} onContractChanged={refresh} />
 

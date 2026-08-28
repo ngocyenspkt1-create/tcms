@@ -14,7 +14,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const item=await withSecurityTransaction(context,async(client)=>{
       const contracts=new PostgresContractRepository(client); const contract=await contracts.findById(id); if(!contract)return null;
       const items=new PostgresContractItemRepository(client); const current=await items.findById(id,itemId); if(!current)return null;
-      const identityChanged=["itemCode","groupCode","groupName","serviceDescription","workContent","quantity","unit","serviceLocation","completionDurationDays","weightPercent","plannedStartDate","plannedEndDate"].some((key)=>current[key as keyof typeof current]!==input[key as keyof typeof input]);
+      const identityChanged=["itemCode","groupCode","groupName","workScopeId","serviceDescription","workContent","quantity","unit","serviceLocation","completionDurationDays","weightPercent","plannedStartDate","plannedEndDate"].some((key)=>current[key as keyof typeof current]!==input[key as keyof typeof input]);
       if(identityChanged)requireContractPermission(context.principal,"contract.identity.update",contract);
       requireContractPermission(context.principal,"contract.progress.update",contract);
       return items.update(id,itemId,body.expectedVersion as number,input,context.principal.userId);

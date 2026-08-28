@@ -5,6 +5,7 @@ export interface ContractItem {
   id: string;
   contractId: string;
   sequenceNumber: number;
+  workScopeId?: string;
   itemCode?: string;
   groupCode?: string;
   groupName?: string;
