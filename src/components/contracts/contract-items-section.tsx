@@ -303,6 +303,22 @@ export function ContractItemsSection({
     return () => window.clearTimeout(timeoutId);
   }, [load]);
 
+  async function reloadWorkScopes() {
+    try {
+      const scopeData = await readJson<{ scopes: WorkScope[] }>(
+        await fetch(`/api/contracts/${encodeURIComponent(contractId)}/scopes`, {
+          cache: "no-store",
+        }),
+      );
+
+      setWorkScopes(scopeData.scopes);
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Không thể tải phạm vi công việc.",
+      );
+    }
+  }
+
   function startCreate() {
     setEditing(null);
 
@@ -312,6 +328,7 @@ export function ContractItemsSection({
 
     setOpen(true);
     setError(null);
+    void reloadWorkScopes();
   }
 
   function startEdit(
@@ -335,6 +352,7 @@ export function ContractItemsSection({
     setForm(input);
     setOpen(true);
     setError(null);
+    void reloadWorkScopes();
   }
 
   function startPdfImport() {
