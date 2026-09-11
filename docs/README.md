@@ -14,6 +14,7 @@ Thư mục `docs/` là bộ nhớ lâu dài của dự án. Mục tiêu là giú
    - [Ma trận RBAC](security/rbac-matrix.md)
    - [Checklist ATTT](security/implementation-checklist.md)
    - [Trạng thái triển khai ATTT](implementation-status.md)
+   - [Điều kiện bàn giao production cho IT](PRODUCTION_HANDOFF.md)
    - [Database DEV](../database/README.md)
 
 Không cần scan lại toàn repository nếu ROADMAP và tài liệu domain đã đủ cho task. Khi cần xác minh, inspect có chọn lọc file được tài liệu chỉ ra.
@@ -33,10 +34,10 @@ Không cần scan lại toàn repository nếu ROADMAP và tài liệu domain đ
 
 ## Current snapshot
 
-- **ALREADY IMPLEMENTED**: UI hợp đồng; API list/detail/create/update; PostgreSQL contract repository; RBAC/audit foundation; migration và DB scripts trong source.
-- **IN PROGRESS**: PostgreSQL local end-to-end; DEV auth runtime; contractors; contract items; documents/audit operationalization.
-- **PLANNED**: milestones, inspections, issues, acceptance, full document workflow, audit UI và production infrastructure.
-- **NEXT**: kiểm chứng PostgreSQL local + migration/seed/RLS/audit/backup; sau đó hoàn thiện Contract Item theo lát cắt nhỏ.
+- **ALREADY IMPLEMENTED**: PostgreSQL DEV migration `001`–`020`; các phân hệ đến Acceptance; Documents metadata/GET API/UI tra cứu; DEV auth; RLS/audit; backup và restore drill; production build cục bộ.
+- **IN PROGRESS**: Documents upload/quét mã độc, hoàn thiện MVP, loại dữ liệu mẫu còn lại, đóng gói cấu hình production và chuẩn bị UAT/bàn giao IT.
+- **PLANNED**: audit UI và production infrastructure.
+- **NEXT**: triển khai upload Google Drive phía server và kiểm soát file an toàn.
 
 ## Documentation authority
 

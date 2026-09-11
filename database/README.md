@@ -2,9 +2,9 @@
 
 ## Trạng thái
 
-`DRAFT - CHỈ DÙNG CHO DEV/TEST VỚI DỮ LIỆU GIẢ`
+`DEV ĐÃ KIỂM CHỨNG - CHỈ DÙNG DỮ LIỆU GIẢ/ĐÃ ẨN DANH`
 
-Ba migration tại `migrations/001_security_foundation.sql`, `migrations/002_api_runtime.sql` và `migrations/003_contract_domain.sql` tạo schema PostgreSQL, RBAC, audit append-only, RLS bắt buộc, role runtime quyền tối thiểu và nền dữ liệu Contract/Contract Item.
+Các migration `001` đến `020` đã được áp dụng trên `tcms_dev`. Chúng tạo nền RBAC, audit append-only, RLS, role runtime quyền tối thiểu và các miền Department, Personnel/User, Contractor, Contract, Contract Item, tracking, quy tắc thời gian, WorkScope, Contract Goods Item, quyết định giám sát, Milestone, Inspection, Technical Issue, Acceptance và Documents metadata. Migration 019–020 bổ sung metadata Google Drive và quyền tối thiểu để tác vụ quét xử lý file chờ.
 
 IT đã xác nhận PostgreSQL DEV. DBA vẫn cần review migration và chạy bằng tài khoản migration riêng trước khi kết nối ứng dụng.
 
@@ -46,14 +46,30 @@ npm.cmd run db:seed
 npm.cmd run db:check
 ```
 
-`db:migrate` chạy migration 001, 002 và 003 theo thứ tự tên file bằng tài khoản trong `MIGRATION_DATABASE_URL`. `db:check` dùng tài khoản runtime trong `DATABASE_URL` và chỉ được đọc bảng theo dõi `tcms.schema_migrations`; quyền này không cho phép sửa hoặc xóa lịch sử migration.
+`db:migrate` chạy mọi migration theo thứ tự tên file bằng tài khoản trong `MIGRATION_DATABASE_URL`. `db:check` dùng tài khoản runtime trong `DATABASE_URL` và chỉ được đọc bảng theo dõi `tcms.schema_migrations`; quyền này không cho phép sửa hoặc xóa lịch sử migration.
+
+Kiểm chứng backup và restore tự động vào database `_test` tạm thời:
+
+```powershell
+npm.cmd run db:backup
+npm.cmd run db:verify-restore
+npm.cmd run db:verify-personnel
+npm.cmd run db:verify-contractors
+npm.cmd run db:verify-supervision
+npm.cmd run db:verify-milestones
+npm.cmd run db:verify-inspections-issues
+npm.cmd run db:verify-acceptances
+npm.cmd run db:verify-documents
+```
+
+`db:verify-restore` chọn backup mới nhất, tạo `tcms_restore_readiness_test`, khôi phục và kiểm tra schema/migration, sau đó luôn xóa database tạm. Không chạy script này với credential production.
 
 Không đưa connection string, mật khẩu hoặc token vào lệnh, README, mã nguồn hay lịch sử shell. Credential DEV phải được cấp qua cơ chế secret được phê duyệt.
 
 ## Việc chưa được phép coi là hoàn thành
 
-- Chưa chạy migration trên PostgreSQL thật.
-- Chưa benchmark hoặc kiểm thử restore/PITR.
+- Migration `001`–`020`, seed, RLS, audit và restore đã được kiểm chứng trên PostgreSQL local DEV; Documents verifier kiểm chứng ngày 10/09/2026 và rollback sạch dữ liệu giả.
+- Chưa kiểm thử PITR, mã hóa backup, lưu bản sao ngoài máy DEV hoặc RPO/RTO trên hạ tầng production.
 - Khung OIDC đã có; chưa kiểm thử callback/token với IdP thật do chưa có cấu hình runtime trong workspace.
 - Chưa tạo database role/grant production.
 - Chưa được DBA/IT/ATTT review migration và chính sách RLS.

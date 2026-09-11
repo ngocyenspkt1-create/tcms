@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -11,6 +11,7 @@ import { VietnameseDateInput } from "@/components/contracts/vietnamese-date-inpu
 import { useContracts, type ContractInput } from "@/components/contracts/contract-store";
 import type { ContractFormImportDraft, PendingContractPdfImport } from "@/types/contract-create-import";
 import type { Contract, ContractStatus, Supervisor } from "@/types/contract";
+import type { Contractor } from "@/types/contractor";
 
 type ContractFormProps =
   | { mode: "create"; contractId?: never }
@@ -47,6 +48,7 @@ function createBlankContract(): ContractInput {
     contractNumber: "",
     packageName: "",
     leadDepartment: "PXVH1",
+    contractorId: undefined,
     contractorName: "",
     contractorAddress: "",
     contractorPhone: "",
@@ -153,6 +155,17 @@ function ContractEditor({
   const [errors, setErrors] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [pendingPdfImport, setPendingPdfImport] = useState<PendingContractPdfImport | null>(null);
+  const [contractors, setContractors] = useState<Contractor[]>([]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/contractors", { cache:"no-store" }).then(async (response) => {
+      const body = await response.json().catch(() => ({})) as { contractors?:Contractor[];message?:string };
+      if (!response.ok) throw new Error(body.message ?? "Không thể tải danh mục nhà thầu.");
+      if (active) setContractors(body.contractors ?? []);
+    }).catch((reason) => { if (active) setErrors([reason instanceof Error ? reason.message : "Không thể tải danh mục nhà thầu."]); });
+    return () => { active = false; };
+  }, []);
 
   function updateField<K extends keyof ContractInput>(
     field: K,
@@ -165,7 +178,22 @@ function ContractEditor({
     const groundedFields = Object.fromEntries(
       Object.entries(imported).filter(([, value]) => value !== undefined),
     ) as Partial<ContractInput>;
-    setDraft((currentDraft) => ({ ...currentDraft, ...groundedFields }));
+    const matchedContractor = imported.contractorName
+      ? contractors.find((item) => item.active && item.name.trim().toLocaleLowerCase("vi") === imported.contractorName!.trim().toLocaleLowerCase("vi"))
+      : undefined;
+    setDraft((currentDraft) => ({
+      ...currentDraft,
+      ...groundedFields,
+      contractorId: matchedContractor?.id ?? currentDraft.contractorId,
+      contractorName: matchedContractor?.name ?? groundedFields.contractorName ?? currentDraft.contractorName,
+    }));
+  }
+
+  function selectContractor(contractorId:string) {
+    const contractor=contractors.find((item)=>item.id===contractorId);
+    if(!contractor){updateField("contractorId",undefined);return;}
+    setDraft((current)=>({...current,contractorId:contractor.id,contractorName:contractor.name,
+      contractorAddress:contractor.address??"",contractorPhone:contractor.phone??"",contractorRepresentative:contractor.representative??""}));
   }
 
   function updateSupervisor(
@@ -190,6 +218,7 @@ function ContractEditor({
     if (!contractNumber) validationErrors.push("Chưa nhập số hợp đồng.");
     if (!draft.packageName.trim()) validationErrors.push("Chưa nhập tên gói thầu.");
     if (!draft.leadDepartment.trim()) validationErrors.push("Chưa nhập đơn vị chủ trì.");
+    if (!draft.contractorId) validationErrors.push("Chưa chọn nhà thầu/đơn vị thực hiện từ danh mục.");
     if (!draft.contractorName.trim()) validationErrors.push("Chưa nhập nhà thầu/đơn vị thực hiện.");
 
     const duplicate = contracts.some(
@@ -382,12 +411,16 @@ function ContractEditor({
         description="Thông tin liên hệ phục vụ phối hợp và xử lý công việc."
       >
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Tên nhà thầu/đơn vị" required wide>
-            <input
-              value={draft.contractorName}
-              onChange={(event) => updateField("contractorName", event.target.value)}
+          <Field label="Nhà thầu/đơn vị" required wide>
+            <select
+              value={draft.contractorId ?? ""}
+              onChange={(event) => selectContractor(event.target.value)}
               className={inputClassName}
-            />
+            >
+              <option value="">Chọn nhà thầu từ danh mục</option>
+              {contractors.filter((item)=>item.active||item.id===draft.contractorId).map((item)=><option key={item.id} value={item.id}>{item.code} - {item.name}{item.active?"":" (ngừng sử dụng)"}</option>)}
+            </select>
+            {draft.contractorName&&<span className="mt-1 block text-[9px] text-slate-400">Tên lưu trên hợp đồng: {draft.contractorName}</span>}
           </Field>
           <Field label="Đại diện nhà thầu">
             <input

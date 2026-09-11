@@ -42,6 +42,7 @@ export interface Contract {
   // =========================================================
   // 3. NHÀ THẦU / ĐƠN VỊ THỰC HIỆN
   // =========================================================
+  contractorId?: string;
   contractorName: string;
   contractorAddress?: string;
   contractorPhone?: string;

@@ -5,6 +5,7 @@ import { use } from "react";
 
 import { useContracts } from "@/components/contracts/contract-store";
 import { ContractItemsSection } from "@/components/contracts/contract-items-section";
+import { ContractGoodsItemsSection } from "@/components/contracts/contract-goods-items-section";
 import { ContractStructureSection } from "@/components/contracts/contract-structure-section";
 import { AppHeader } from "@/components/layout/app-header";
 import { AppSidebar } from "@/components/layout/app-sidebar";
@@ -197,7 +198,7 @@ export default function ContractDetailPage({
     return (
       <ContractDetailState
         title="Đang tải hợp đồng"
-        description="Hệ thống đang đọc dữ liệu đã lưu trên trình duyệt."
+        description="Hệ thống đang đọc dữ liệu từ cơ sở dữ liệu tập trung."
       />
     );
   }
@@ -329,18 +330,18 @@ export default function ContractDetailPage({
                     <InfoItem
                       label="Tổng thời gian hợp đồng"
                       value={
-                        contract.contractDurationDays
+                        contract.contractDurationDays != null
                           ? `${contract.contractDurationDays} ngày`
                           : undefined
                       }
                     />
                     <InfoItem
                       label="Thời gian cung cấp dịch vụ"
-                      value={contract.serviceProvisionDurationDays !== undefined ? `${contract.serviceProvisionDurationDays} ngày` : undefined}
+                      value={contract.serviceProvisionDurationDays != null ? `${contract.serviceProvisionDurationDays} ngày` : undefined}
                     />
                     <InfoItem
                       label="Thời gian thực hiện theo đơn vị / phạm vi"
-                      value={contract.unitExecutionDurationDays !== undefined
+                      value={contract.unitExecutionDurationDays != null
                         ? `${contract.unitExecutionDurationDays} ngày${contract.unitExecutionContinuous ? " liên tục" : ""}`
                         : undefined}
                     />
@@ -353,6 +354,8 @@ export default function ContractDetailPage({
                 <ContractStructureSection contractId={contract.id} />
 
                 <ContractItemsSection contractId={contract.id} onContractChanged={refresh} />
+
+                <ContractGoodsItemsSection contractId={contract.id} />
 
                 <SectionCard
                   title="Các mốc thời gian"

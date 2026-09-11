@@ -71,13 +71,13 @@ export default function Home() {
     .slice(0, 5);
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-[#f6f7fb]">
       <AppHeader />
 
       <div className="flex">
         <AppSidebar />
 
-        <main className="min-w-0 flex-1 p-4">
+        <main className="min-w-0 flex-1 p-4 lg:p-6">
           <div className="mx-auto max-w-[1800px]">
             {error && (
               <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
@@ -85,20 +85,29 @@ export default function Home() {
               </div>
             )}
             {/* Tiêu đề */}
-            <div className="mb-4">
-              <h1 className="text-xl font-bold text-slate-900">
-                Tổng quan quản lý hợp đồng
+            <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+              <div>
+              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
+                TỔNG QUAN QUẢN LÝ HỢP ĐỒNG
               </h1>
 
               <p className="mt-1 text-xs text-slate-500">
                 Theo dõi tình trạng thực hiện, tiến độ và các vấn đề kỹ thuật
                 cần xử lý.
               </p>
+              </div>
+              <Link href="/contracts/new" className="rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-200 transition hover:-translate-y-0.5">＋ Thêm hợp đồng</Link>
             </div>
+
+            <section className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 via-white to-emerald-50 p-4 shadow-sm">
+              <div className="flex items-center gap-3"><span className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-800 text-xl text-white">▦</span><div><p className="text-sm font-bold text-slate-900">Trung tâm điều hành hợp đồng VH1</p><p className="mt-1 text-[10px] text-slate-500">Dữ liệu đồng bộ từ PostgreSQL · kiểm soát quyền phía máy chủ</p></div></div>
+              <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2 text-[10px] font-semibold text-emerald-700"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Hệ thống DEV hoạt động</div>
+            </section>
 
             {/* KPI */}
             <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex min-h-28 items-center justify-between rounded-2xl border border-white bg-gradient-to-br from-blue-50 to-sky-100 p-5 text-blue-700 shadow-sm">
+                <div>
                 <p className="text-xs text-slate-500">
                   Tổng hợp đồng
                 </p>
@@ -110,9 +119,11 @@ export default function Home() {
                 <p className="mt-1 text-[10px] text-slate-400">
                   Hợp đồng đang theo dõi
                 </p>
+                </div><span className="text-4xl opacity-35">▤</span>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex min-h-28 items-center justify-between rounded-2xl border border-white bg-gradient-to-br from-emerald-50 to-green-100 p-5 text-emerald-700 shadow-sm">
+                <div>
                 <p className="text-xs text-slate-500">
                   Đang thực hiện
                 </p>
@@ -124,9 +135,11 @@ export default function Home() {
                 <p className="mt-1 text-[10px] text-slate-400">
                   Hợp đồng đang triển khai
                 </p>
+                </div><span className="text-4xl opacity-35">↗</span>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex min-h-28 items-center justify-between rounded-2xl border border-white bg-gradient-to-br from-amber-50 to-yellow-100 p-5 text-amber-700 shadow-sm">
+                <div>
                 <p className="text-xs text-slate-500">
                   Cần chú ý
                 </p>
@@ -138,9 +151,11 @@ export default function Home() {
                 <p className="mt-1 text-[10px] text-slate-400">
                   Tiến độ hoặc thời hạn gần
                 </p>
+                </div><span className="text-4xl opacity-35">!</span>
               </div>
 
-              <div className="rounded-lg border border-slate-200 bg-white p-4">
+              <div className="flex min-h-28 items-center justify-between rounded-2xl border border-white bg-gradient-to-br from-violet-50 to-purple-100 p-5 text-violet-700 shadow-sm">
+                <div>
                 <p className="text-xs text-slate-500">
                   Tồn tại đang mở
                 </p>
@@ -152,11 +167,12 @@ export default function Home() {
                 <p className="mt-1 text-[10px] text-slate-400">
                   Yêu cầu đang chờ xử lý
                 </p>
+                </div><span className="text-4xl opacity-35">◉</span>
               </div>
             </div>
 
             {/* Hợp đồng cần theo dõi */}
-            <section className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
                 <div>
                   <h2 className="text-sm font-semibold">
@@ -170,7 +186,7 @@ export default function Home() {
 
                 <Link
                   href="/contracts"
-                  className="rounded-md bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                  className="rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-slate-800"
                 >
                   Xem tất cả hợp đồng
                 </Link>
@@ -277,7 +293,7 @@ export default function Home() {
             </section>
 
             {/* Vấn đề cần xử lý */}
-            <section className="mt-4 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <section className="mt-5 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
               <div className="border-b border-slate-200 px-4 py-3">
                 <h2 className="text-sm font-semibold">
                   Vấn đề cần xử lý

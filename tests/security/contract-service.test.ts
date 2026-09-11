@@ -20,6 +20,7 @@ function createFixture() {
     contractNumber: "203/HĐ-NĐDH.26",
     packageName: "Hợp đồng kiểm thử phân quyền",
     leadDepartment: "PXSCCN",
+    contractorId: "11111111-1111-4111-8111-111111111111",
     contractorName: "Nhà thầu kiểm thử",
     supervisors: [],
     isExtended: false,

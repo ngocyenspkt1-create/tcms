@@ -1,6 +1,6 @@
 # TCMS Project Overview
 
-> Cập nhật theo repository ngày 2026-08-25. Đây là mô tả trạng thái thực tế, không phải cam kết hệ thống đã sẵn sàng production.
+> Cập nhật theo repository và PostgreSQL DEV ngày 2026-09-07. Đây là mô tả trạng thái thực tế, không phải cam kết hệ thống đã sẵn sàng production.
 
 ## Status legend
 
@@ -72,19 +72,18 @@ Browser/UI
 
 Frontend không có database credential và không kết nối PostgreSQL trực tiếp.
 
-### Database — IN PROGRESS
+### Database — ALREADY IMPLEMENTED trên local DEV
 
-PostgreSQL là database mục tiêu và toàn bộ repository/API hiện phụ thuộc nó. Migration 001–003, seed và scripts local đã tồn tại. Tuy nhiên repository không cung cấp bằng chứng PostgreSQL local đã cài hoặc migration đã chạy, vì vậy database runtime là **NEEDS CONFIRMATION**.
+PostgreSQL là database mục tiêu và toàn bộ repository/API hiện phụ thuộc nó. Migration 001–018, seed, RLS, audit, backup/restore drill và verifier theo domain đã chạy trên local DEV. TEST/UAT/PROD vẫn là **PLANNED** và cần IT/DBA/ATTT review.
 
-### API — ALREADY IMPLEMENTED một phần
+### API — ALREADY IMPLEMENTED cho các domain hiện tại
 
 - `GET /api/contracts`
 - `POST /api/contracts`
 - `GET /api/contracts/[id]`
 - `PUT /api/contracts/[id]`
 - Auth.js handlers tại `/api/auth/[...nextauth]`
-
-Chưa có API cho Contract Item và các domain tương lai.
+- Contract Item, tracking, WorkScope, TimeRule, Goods Item, Department, Personnel, Contractor, Supervision Decision, Milestone, Inspection, Technical Issue và Acceptance.
 
 ### Authentication — IN PROGRESS
 
@@ -108,16 +107,15 @@ Code hỗ trợ OIDC qua Auth.js và DEV identity fallback ở server. DEV fallb
 
 ### IN PROGRESS
 
-- PostgreSQL local và migration chưa được xác nhận đã chạy thành công trên máy phát triển.
+- PostgreSQL local DEV và migration `001`–`018` đã được xác nhận; chưa xác nhận trên TEST/UAT/PROD.
 - DEV auth có code và seed identity nhưng phụ thuộc PostgreSQL/config local để chạy end-to-end.
 - OIDC/Auth.js có adapter cấu hình nhưng chưa kiểm thử với IdP thật.
-- `contractors` và `contract_items` đã có schema/seed, chưa có đầy đủ type/service/repository/API/UI.
+- Danh mục Department/Personnel/Contractor, Contract Item/WorkScope/TimeRule/Goods, quyết định giám sát, Milestone, Inspection, Technical Issue và Acceptance đã có schema/API/UI tương ứng.
 - UI có một số nội dung mẫu tĩnh, ví dụ danh sách vấn đề trên dashboard.
 
 ### PLANNED
 
-- Milestones, inspections, technical issues/findings, acceptance.
-- CRUD và UI cho departments, personnel, contractors.
+- Document workflow, payment/settlement chi tiết và audit UI.
 - Tài liệu an toàn, audit UI, payment/settlement domain đầy đủ.
 - TEST/UAT, production, SSO Công ty, KMS/Vault/HSM, SIEM, malware scanning và PITR.
 
@@ -133,7 +131,6 @@ Code hỗ trợ OIDC qua Auth.js và DEV identity fallback ở server. DEV fallb
 
 ## NEEDS CONFIRMATION
 
-- PostgreSQL đã được cài và migration 001–003 đã chạy thành công hay chưa.
 - Công nghệ/IdP/kho tài liệu được IT/ATTT phê duyệt chính thức.
 - Quy tắc tính tiến độ hợp đồng từ hạng mục: nhập tay, weighted progress, hay kết hợp.
 - Phân loại và thời hạn lưu từng nhóm dữ liệu/audit.

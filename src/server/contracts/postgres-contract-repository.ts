@@ -11,7 +11,7 @@ type SensitiveCommercial = Pick<Contract, "costNote" | "managementDirection" | "
 
 type ContractRow = Record<string, unknown> & {
   id: string; sequence_number: string; contract_number: string; package_name: string;
-  lead_department: string; lead_department_id: string; contractor_name: string;
+  lead_department: string; lead_department_id: string; contractor_id: string | null; contractor_name: string;
   contractor_sensitive_ciphertext: Buffer | null; commercial_sensitive_ciphertext: Buffer | null;
   progress_percent: number; status: ContractStatus; version: number; supervisors: Supervisor[] | null;
 };
@@ -35,7 +35,7 @@ function mapRow(row: ContractRow): Contract {
   return {
     id: row.id, stt: Number(row.sequence_number), version: row.version,
     contractNumber: row.contract_number, packageName: row.package_name,
-    leadDepartment: row.lead_department, contractorName: row.contractor_name,
+    leadDepartment: row.lead_department, contractorId:row.contractor_id??undefined, contractorName: row.contractor_name,
     ...contractor, supervisors: row.supervisors ?? [],
     handoverDocument: row.handover_document as string | undefined,
     handoverDate: date(row.handover_date), signedDate: date(row.signed_date),
@@ -81,18 +81,19 @@ export class PostgresContractRepository {
   async findById(id: string) { const row = (await this.client.query(`${selectContract} AND c.id = $1`, [id])).rows[0]; return row ? mapRow(row as ContractRow) : null; }
 
   async create(input: ContractWriteInput, actorId: string) {
+    const contractor=await this.resolveContractor(input.contractorId);
     const secret = encrypted(input);
     const result = await this.client.query(`INSERT INTO tcms.contracts
-      (contract_number, package_name, lead_department_id, contractor_name, contractor_sensitive_ciphertext,
+      (contract_number, package_name, lead_department_id, contractor_id, contractor_name, contractor_sensitive_ciphertext,
        contractor_sensitive_key_version, handover_document, handover_date, signed_date, contract_duration_days,
        service_provision_duration_days, service_duration_text, unit_execution_duration_days, unit_execution_continuous,
        unit_execution_trigger_text, effective_condition_text, contract_start_date, site_handover_date, goods_end_date,
        service_end_date, contract_end_date, is_extended, extended_until, implementation_invitation_date, progress_percent,
        progress_note, commercial_sensitive_ciphertext, commercial_sensitive_key_version, payment_settlement_status,
        status, created_by, updated_by)
-      SELECT $1,$2,d.id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$30
-      FROM tcms.departments d WHERE d.code=$31 AND d.active RETURNING id`,
-      [input.contractNumber,input.packageName,input.contractorName,secret.contractor.ciphertext,secret.contractor.keyVersion,
+      SELECT $1,$2,d.id,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$31
+      FROM tcms.departments d WHERE d.code=$32 AND d.active RETURNING id`,
+      [input.contractNumber,input.packageName,contractor.id,contractor.name,secret.contractor.ciphertext,secret.contractor.keyVersion,
        input.handoverDocument,input.handoverDate||null,input.signedDate||null,input.contractDurationDays,
        input.serviceProvisionDurationDays,input.serviceDurationText,input.unitExecutionDurationDays,
        input.unitExecutionContinuous ?? null,input.unitExecutionTriggerText,input.effectiveConditionText,
@@ -112,19 +113,20 @@ export class PostgresContractRepository {
     const current = await this.findById(id);
     if (!current) throw new Error("CONCURRENT_UPDATE_OR_NOT_FOUND");
     const supervisorsChanged = JSON.stringify(current.supervisors) !== JSON.stringify(input.supervisors);
+    const contractor=await this.resolveContractor(input.contractorId,current.contractorId);
     const secret = encrypted(input);
     const result = await this.client.query(`UPDATE tcms.contracts c SET
-      contract_number=$1, package_name=$2, lead_department_id=d.id, contractor_name=$3,
-      contractor_sensitive_ciphertext=$4, contractor_sensitive_key_version=$5, handover_document=$6, handover_date=$7,
-      signed_date=$8, contract_duration_days=$9, service_provision_duration_days=$10, service_duration_text=$11,
-      unit_execution_duration_days=$12, unit_execution_continuous=$13, unit_execution_trigger_text=$14,
-      effective_condition_text=$15, contract_start_date=$16, site_handover_date=$17, goods_end_date=$18,
-      service_end_date=$19, contract_end_date=$20, is_extended=$21, extended_until=$22,
-      implementation_invitation_date=$23, progress_percent=$24, progress_note=$25,
-      commercial_sensitive_ciphertext=$26, commercial_sensitive_key_version=$27,
-      payment_settlement_status=$28, status=$29, updated_by=$30 FROM tcms.departments d
-      WHERE c.id=$31 AND c.version=$32 AND d.code=$33 AND d.active RETURNING c.id`,
-      [input.contractNumber,input.packageName,input.contractorName,secret.contractor.ciphertext,secret.contractor.keyVersion,
+      contract_number=$1, package_name=$2, lead_department_id=d.id, contractor_id=$3, contractor_name=$4,
+      contractor_sensitive_ciphertext=$5, contractor_sensitive_key_version=$6, handover_document=$7, handover_date=$8,
+      signed_date=$9, contract_duration_days=$10, service_provision_duration_days=$11, service_duration_text=$12,
+      unit_execution_duration_days=$13, unit_execution_continuous=$14, unit_execution_trigger_text=$15,
+      effective_condition_text=$16, contract_start_date=$17, site_handover_date=$18, goods_end_date=$19,
+      service_end_date=$20, contract_end_date=$21, is_extended=$22, extended_until=$23,
+      implementation_invitation_date=$24, progress_percent=$25, progress_note=$26,
+      commercial_sensitive_ciphertext=$27, commercial_sensitive_key_version=$28,
+      payment_settlement_status=$29, status=$30, updated_by=$31 FROM tcms.departments d
+      WHERE c.id=$32 AND c.version=$33 AND d.code=$34 AND d.active RETURNING c.id`,
+      [input.contractNumber,input.packageName,contractor.id,contractor.name,secret.contractor.ciphertext,secret.contractor.keyVersion,
        input.handoverDocument,input.handoverDate||null,input.signedDate||null,input.contractDurationDays,
        input.serviceProvisionDurationDays,input.serviceDurationText,input.unitExecutionDurationDays,
        input.unitExecutionContinuous ?? null,input.unitExecutionTriggerText,input.effectiveConditionText,
@@ -135,5 +137,13 @@ export class PostgresContractRepository {
     if (!result.rowCount) throw new Error("CONCURRENT_UPDATE_OR_NOT_FOUND");
     if (supervisorsChanged) await replaceSupervisors(this.client, id, input.supervisors, actorId);
     return (await this.findById(id))!;
+  }
+
+  private async resolveContractor(contractorId:string|undefined,currentContractorId?:string) {
+    if(!contractorId) throw new SyntaxError("CONTRACTOR_REQUIRED");
+    const result=await this.client.query(`SELECT id::text,name,active FROM tcms.contractors WHERE id=$1`,[contractorId]);
+    const row=result.rows[0];
+    if(!row||(!row.active&&contractorId!==currentContractorId)) throw new Error("CONTRACTOR_NOT_AVAILABLE");
+    return {id:String(row.id),name:String(row.name)};
   }
 }

@@ -6,7 +6,7 @@
 
 - Dự án hiện hữu, đang phát triển; không scaffold/rewrite lại.
 - Worktree tại lần cập nhật tài liệu có nhiều file modified/untracked. Không reset, checkout hoặc xóa file để “làm sạch” nếu chưa có yêu cầu rõ.
-- Không có bằng chứng PostgreSQL local/migration đã chạy thành công. Không mô tả DB là operational nếu chưa kiểm tra lại.
+- PostgreSQL local DEV đã chạy migration `001`–`020`; `db:check` và các verifier đến Documents metadata/RLS đã đạt. Trạng thái production vẫn chưa được xác nhận.
 
 ## Stack thực tế
 
@@ -15,7 +15,7 @@
 - `pg` cho PostgreSQL.
 - PDF import dùng `pdf-parse` + `tesseract.js` cho fallback local và Responses API cho luồng AI chính; provider nằm trong `src/server/pdf`.
 - Node.js scripts + PowerShell cho database local.
-- Không có ORM và chưa có Zod.
+- Không có ORM; các service mới dùng Zod để validation server nghiêm ngặt.
 
 Trước khi dùng API/convention Next.js, đọc hướng dẫn tương ứng trong `node_modules/next/dist/docs/` theo `AGENTS.md`.
 
@@ -36,6 +36,7 @@ Trước khi dùng API/convention Next.js, đọc hướng dẫn tương ứng t
 | DB utilities | `scripts/database` |
 | Tests | `tests/security` |
 | PDF Import | `src/server/pdf`, `src/app/api/contracts/[id]/items/import`, `src/types/contract-item-import.ts` |
+| Documents | `src/app/documents`, `src/app/api/documents`, `src/server/documents`, `src/types/document-record.ts` |
 
 ## Data flow hiện tại
 
@@ -72,7 +73,8 @@ UI detail hiện lấy contract từ client store đã tải danh sách, chưa f
 - `001_security_foundation`: departments, users, roles/permissions, contracts, supervisors, documents, role scopes, audit, RLS.
 - `002_api_runtime`: field permission trigger, FORCE RLS, runtime role/grants.
 - `003_contract_domain`: contractors, contract items, RLS/audit, contract contractor FK.
-- Migration files đã được viết nhưng chưa xác nhận chạy trên PostgreSQL thật.
+- `007`–`020`: cấu trúc/tiến độ hạng mục, WorkScope/TimeRule/Goods, danh mục Department/Personnel/Contractor, quyết định giám sát, Milestone, Inspection, Technical Issue, Acceptance và Documents metadata/RLS.
+- Migration `001`–`020` đã được áp dụng trên PostgreSQL DEV; không suy rộng kết quả này thành production readiness.
 - Không sửa migration cũ sau khi đã/chuẩn bị áp dụng; tạo migration mới tương thích ngược.
 
 ## Local commands
@@ -97,7 +99,15 @@ Không chạy `db:setup`/restore khi chưa xác nhận `.env.local` và target `
 - Route preview yêu cầu quyền `contract.identity.update` và xác nhận PDF đã khử nhạy cảm.
 - AI chỉ tạo draft; confirm route validate lại và ghi toàn bộ trong một security transaction.
 - `TCMS_PDF_LOCAL_OCR_FALLBACK=true` bật fallback text/OCR local. Fallback không tự tạo Contract Item.
-- **NEEDS CONFIRMATION**: chạy thử với PDF giả/ẩn danh, API key được phê duyệt, PostgreSQL migration 001–004, RLS và audit thật.
+- **NEEDS CONFIRMATION**: chạy thử PDF/AI với file giả/ẩn danh và API key/provider được phê duyệt.
+
+## Google Drive document storage decision
+
+- File hợp đồng sẽ lưu trong một thư mục Google Drive được chia sẻ của phân xưởng, không phải Shared Drive.
+- PostgreSQL lưu metadata, SHA-256, trạng thái quét và Google Drive File ID; không lưu nội dung file.
+- Adapter Drive phải chạy phía server và lấy Folder ID/credential từ environment variable hoặc secret file ngoài repository.
+- Folder ID của thư mục `Quản lý hợp đồng` đã được cấu hình trong local DEV; đây không phải secret. Chưa có OAuth Drive và malware scanner được phê duyệt; vì vậy upload thật vẫn là **IN PROGRESS**, không được mô tả là đã triển khai.
+- `GET /api/documents` và `/documents` đã kiểm chứng HTTP 200. Nút upload cố ý bị khóa cho đến khi có API upload an toàn; không bật chỉ dựa trên việc có Folder ID.
 
 ## Safe change workflow
 

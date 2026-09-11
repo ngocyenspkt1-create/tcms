@@ -7,7 +7,7 @@ import type { ParsedContractItemImport } from "../../src/server/pdf/contract-ite
 
 const contractInput = {
   contractNumber: "203/HĐ", packageName: "Gói bảo dưỡng", leadDepartment: "PXVH1",
-  contractorName: "Nhà thầu A", supervisors: [], isExtended: false,
+  contractorId:"11111111-1111-4111-8111-111111111111", contractorName: "Nhà thầu A", supervisors: [], isExtended: false,
   progressPercent: 0, status: "DRAFT",
 } as ContractInput;
 
@@ -31,7 +31,7 @@ function harness(failOnItem: string | null = null) {
         throw error;
       }
     },
-    createWriter: (_client: object) => ({
+    createWriter: () => ({
       async createContract() { state.contracts.push("contract-1"); return { id: "contract-1" }; },
       contractId(contract: { id: string }) { return contract.id; },
       async createItem(_contractId: string, prepared: ParsedContractItemImport) {

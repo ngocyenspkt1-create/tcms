@@ -33,7 +33,7 @@ try {
 
   # Restore ownership and ACL from the archive. A maintenance/admin role is
   # required so original owners and grants can be restored safely.
-  & $pgRestore --clean --if-exists --exit-on-error --no-password $BackupFile
+  & $pgRestore --dbname=$dbName --clean --if-exists --exit-on-error --no-password $BackupFile
   if ($LASTEXITCODE -ne 0) { throw "Restore thất bại." }
   Write-Output "Restore DEV hoàn tất từ: $BackupFile"
 } finally {

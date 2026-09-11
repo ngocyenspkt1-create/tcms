@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { displayToIsoDate, isoToDisplayDate } from "@/lib/date-utils";
 
 export interface VietnameseDateInputProps {
@@ -30,14 +30,14 @@ export function VietnameseDateInput({
 }: VietnameseDateInputProps) {
   const [displayValue, setDisplayValue] = useState<string>(() => isoToDisplayDate(value));
   const [error, setError] = useState<string | null>(null);
+  const [lastExternalValue, setLastExternalValue] = useState(value);
   const hiddenDateInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync internal displayValue when value prop changes externally
-  useEffect(() => {
-    const formatted = isoToDisplayDate(value);
-    setDisplayValue(formatted);
+  if (value !== lastExternalValue) {
+    setLastExternalValue(value);
+    setDisplayValue(isoToDisplayDate(value));
     setError(null);
-  }, [value]);
+  }
 
   function handleTextChange(inputStr: string) {
     setDisplayValue(inputStr);

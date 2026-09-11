@@ -41,7 +41,7 @@ TCMS sẽ chuyển từ ứng dụng chỉ chạy trên trình duyệt sang mô 
 | D-02 | IdP/SSO chính thức là gì; có OIDC/SAML hay cần lớp liên kết AD/LDAP? |
 | D-03 | PostgreSQL và các công cụ đề xuất có nằm trong danh mục 1826/QĐ-EVN? |
 | D-04 | Vault/HSM/KMS nào đã có sẵn; ai là đơn vị quản trị khóa? |
-| D-05 | Kho tài liệu được phép: DMS/SharePoint/MinIO/Google Drive hay hệ thống nội bộ khác? |
+| D-05 | **DECISION**: dùng một thư mục Google Drive được chia sẻ của phân xưởng, không phải Shared Drive. TCMS lưu metadata/File ID trong PostgreSQL và chỉ kết nối Drive từ server. Cơ chế danh tính dịch vụ và Folder ID chờ IT cung cấp. |
 | D-06 | Công cụ quét malware nào được phê duyệt? |
 | D-07 | Phân loại dữ liệu, thời hạn lưu dữ liệu và thời hạn lưu audit log? |
 | D-08 | RPO/RTO chính thức và vị trí lưu bản backup ngoài hệ thống chính? |

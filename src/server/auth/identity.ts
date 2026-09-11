@@ -8,17 +8,36 @@ export type AuthenticatedIdentity = { subject: string; mfaVerified: boolean };
 
 export async function resolvePrincipal(identity: AuthenticatedIdentity): Promise<SecurityPrincipal> {
   const result = await getPool().query({
-    text: `SELECT u.id::text, u.active,
-      COALESCE(array_agg(DISTINCT urs.role_code) FILTER (WHERE urs.role_code IS NOT NULL), '{}') roles,
-      COALESCE(array_agg(DISTINCT urs.department_id::text) FILTER (WHERE urs.department_id IS NOT NULL), '{}') department_ids,
-      COALESCE(array_agg(DISTINCT urs.contract_id::text) FILTER (WHERE urs.contract_id IS NOT NULL), '{}') contract_ids,
-      COALESCE(bool_or(urs.global_scope), false) global_scope
-    FROM tcms.app_users u
-    LEFT JOIN tcms.user_role_scopes urs ON urs.user_id = u.id
-      AND urs.valid_from <= clock_timestamp()
-      AND (urs.valid_until IS NULL OR urs.valid_until > clock_timestamp())
-    WHERE u.identity_subject = $1
-    GROUP BY u.id`,
+    text: `SELECT u.id::text,u.active,
+      ARRAY(SELECT DISTINCT role_code FROM (
+        SELECT s.role_code FROM tcms.user_role_scopes s WHERE s.user_id=u.id
+          AND s.valid_from<=clock_timestamp() AND (s.valid_until IS NULL OR s.valid_until>clock_timestamp())
+        UNION ALL
+        SELECT 'SUPERVISOR'::text FROM tcms.supervision_assignments a
+          JOIN tcms.supervision_decisions d ON d.id=a.decision_id
+          WHERE a.user_id=u.id AND d.status='ISSUED'
+            AND d.effective_from<=current_date AND (d.effective_until IS NULL OR d.effective_until>=current_date)
+            AND (a.active_from IS NULL OR a.active_from<=current_date)
+            AND (a.active_until IS NULL OR a.active_until>=current_date)
+      ) active_roles) roles,
+      ARRAY(SELECT DISTINCT s.department_id::text FROM tcms.user_role_scopes s WHERE s.user_id=u.id
+        AND s.department_id IS NOT NULL AND s.valid_from<=clock_timestamp()
+        AND (s.valid_until IS NULL OR s.valid_until>clock_timestamp())) department_ids,
+      ARRAY(SELECT DISTINCT contract_id FROM (
+        SELECT s.contract_id::text contract_id FROM tcms.user_role_scopes s WHERE s.user_id=u.id
+          AND s.contract_id IS NOT NULL AND s.valid_from<=clock_timestamp()
+          AND (s.valid_until IS NULL OR s.valid_until>clock_timestamp())
+        UNION ALL
+        SELECT a.contract_id::text FROM tcms.supervision_assignments a
+          JOIN tcms.supervision_decisions d ON d.id=a.decision_id
+          WHERE a.user_id=u.id AND d.status='ISSUED'
+            AND d.effective_from<=current_date AND (d.effective_until IS NULL OR d.effective_until>=current_date)
+            AND (a.active_from IS NULL OR a.active_from<=current_date)
+            AND (a.active_until IS NULL OR a.active_until>=current_date)
+      ) active_contracts) contract_ids,
+      EXISTS(SELECT 1 FROM tcms.user_role_scopes s WHERE s.user_id=u.id AND s.global_scope
+        AND s.valid_from<=clock_timestamp() AND (s.valid_until IS NULL OR s.valid_until>clock_timestamp())) global_scope
+    FROM tcms.app_users u WHERE u.identity_subject=$1`,
     values: [identity.subject],
   });
   const row = result.rows[0];

@@ -23,6 +23,14 @@ async function json<T>(response: Response): Promise<T> {
   return body as T;
 }
 
+async function fetchContractStructure(contractId: string) {
+  const [ruleData, scopeData] = await Promise.all([
+    json<{rules:ContractTimeRule[];capabilities:{canUpdate:boolean}}>(await fetch(`/api/contracts/${encodeURIComponent(contractId)}/time-rules`,{cache:"no-store"})),
+    json<{scopes:WorkScope[];tree:WorkScopeNode[];capabilities:{canUpdate:boolean}}>(await fetch(`/api/contracts/${encodeURIComponent(contractId)}/scopes`,{cache:"no-store"})),
+  ]);
+  return { ruleData, scopeData };
+}
+
 function ScopeTree({ nodes, onEdit, onDelete, editable }: {
   nodes: WorkScopeNode[]; onEdit: (scope: WorkScope) => void; onDelete: (scope: WorkScope) => void; editable: boolean;
 }) {
@@ -45,13 +53,17 @@ export function ContractStructureSection({ contractId }: { contractId: string })
   const [scopeForm,setScopeForm]=useState<WorkScopeInput>(emptyScope); const [editingScope,setEditingScope]=useState<WorkScope>(); const [showScopeForm,setShowScopeForm]=useState(false);
 
   const load=useCallback(async()=>{
-    try { setError(undefined); const [ruleData,scopeData]=await Promise.all([
-      json<{rules:ContractTimeRule[];capabilities:{canUpdate:boolean}}>(await fetch(`/api/contracts/${encodeURIComponent(contractId)}/time-rules`,{cache:"no-store"})),
-      json<{scopes:WorkScope[];tree:WorkScopeNode[];capabilities:{canUpdate:boolean}}>(await fetch(`/api/contracts/${encodeURIComponent(contractId)}/scopes`,{cache:"no-store"})),
-    ]); setRules(ruleData.rules); setScopes(scopeData.scopes); setTree(scopeData.tree); setCanUpdate(ruleData.capabilities.canUpdate && scopeData.capabilities.canUpdate);
+    try { const {ruleData,scopeData}=await fetchContractStructure(contractId); setError(undefined); setRules(ruleData.rules); setScopes(scopeData.scopes); setTree(scopeData.tree); setCanUpdate(ruleData.capabilities.canUpdate && scopeData.capabilities.canUpdate);
     } catch(e) { setError(e instanceof Error?e.message:"Không thể tải cấu trúc hợp đồng."); } finally { setLoading(false); }
   },[contractId]);
-  useEffect(()=>{void load();},[load]);
+  useEffect(()=>{
+    let active=true;
+    void fetchContractStructure(contractId)
+      .then(({ruleData,scopeData})=>{if(!active)return;setError(undefined);setRules(ruleData.rules);setScopes(scopeData.scopes);setTree(scopeData.tree);setCanUpdate(ruleData.capabilities.canUpdate&&scopeData.capabilities.canUpdate);})
+      .catch((e)=>{if(active)setError(e instanceof Error?e.message:"Không thể tải cấu trúc hợp đồng.");})
+      .finally(()=>{if(active)setLoading(false);});
+    return()=>{active=false;};
+  },[contractId]);
 
   async function saveRule(event:React.FormEvent){event.preventDefault();try{setError(undefined);const url=editingRule?`/api/contracts/${contractId}/time-rules/${editingRule.id}`:`/api/contracts/${contractId}/time-rules`;await json(await fetch(url,{method:editingRule?"PATCH":"POST",headers:{"content-type":"application/json"},body:JSON.stringify(editingRule?{rule:ruleForm,expectedVersion:editingRule.version}:ruleForm)}));setShowRuleForm(false);setEditingRule(undefined);setRuleForm(emptyRule);await load();}catch(e){setError(e instanceof Error?e.message:"Không thể lưu quy tắc.");}}
   async function saveScope(event:React.FormEvent){event.preventDefault();try{setError(undefined);const url=editingScope?`/api/contracts/${contractId}/scopes/${editingScope.id}`:`/api/contracts/${contractId}/scopes`;await json(await fetch(url,{method:editingScope?"PATCH":"POST",headers:{"content-type":"application/json"},body:JSON.stringify(editingScope?{scope:scopeForm,expectedVersion:editingScope.version}:scopeForm)}));setShowScopeForm(false);setEditingScope(undefined);setScopeForm(emptyScope);await load();}catch(e){setError(e instanceof Error?e.message:"Không thể lưu phạm vi.");}}
